@@ -103,7 +103,7 @@
             initDate();
             initAuthorUI();
             loadDiaries();
-            setInterval(loadDiaries, 3000);
+            setInterval(loadDiaries, 3000); // 3초마다 실시간 동기화
         });
 
         function initDate() {
@@ -135,14 +135,14 @@
 
         function getLocalDiaries() {
             try {
-                return JSON.parse(localStorage.getItem("local_family_diaries_v4") || "[]");
+                return JSON.parse(localStorage.getItem("local_family_diaries_v5") || "[]");
             } catch(e) {
                 return [];
             }
         }
 
         function saveLocalDiaries(list) {
-            localStorage.setItem("local_family_diaries_v4", JSON.stringify(list));
+            localStorage.setItem("local_family_diaries_v5", JSON.stringify(list));
         }
 
         async function loadDiaries() {
@@ -158,6 +158,16 @@
 
             const localData = getLocalDiaries();
             const combinedMap = new Map();
+            
+            // 기본 영구 데이터 보장 (엄마의 코다리덕장 일기 원본 복원)
+            const defaultMotherEntry = {
+                id: 99999999,
+                author: "엄마",
+                content: "코다리덕장, 100일의 거짓말",
+                date: "2026.11.08(일) 21:18"
+            };
+            combinedMap.set(String(defaultMotherEntry.id), defaultMotherEntry);
+
             remoteData.forEach(item => combinedMap.set(String(item.id), item));
             localData.forEach(item => combinedMap.set(String(item.id), item));
 
@@ -187,8 +197,7 @@
                 if(cleanContent.startsWith("[")) {
                     let closingIdx = cleanContent.indexOf("]");
                     if(closingIdx !== -1) {
-                        let moodPart = cleanContent.substring(1, closingIdx).trim(); // 예: "화남 😡"
-                        // 이모지만 추출 (문자열 뒤쪽의 이모지 혹은 기호 추출)
+                        let moodPart = cleanContent.substring(1, closingIdx).trim();
                         let match = moodPart.match(/[\p{Extended_Pictographic}\u{1f300}-\u{1f5ff}\u{1f900}-\u{1f9ff}\u{1f600}-\u{1f64f}\u{2600}-\u{26ff}]/u);
                         if(match) {
                             moodEmoji = match[0];
@@ -207,11 +216,11 @@
                             <div class="flex items-center space-x-2.5">
                                 <span class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-base">${authorEmoji}</span>
                                 <span class="font-extrabold text-base text-slate-900">${authorName}</span>
-                                ${moodEmoji ? `<span class="text-lg" title="기분/활동">${moodEmoji}</span>` : ''}
+                                ${moodEmoji ? `<span class="text-xl" title="기분/활동">${moodEmoji}</span>` : ''}
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-sm text-slate-400 font-semibold">${dateText}</span>
-                                ${isOwner ? `
+                                ${isOwner && item.id !== 99999999 ? `
                                     <button onclick="editDiary(${item.id}, \`${encodeURIComponent(cleanContent)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-base p-1">✏️</button>
                                     <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-base p-1">✕</button>
                                 ` : ''}
@@ -253,6 +262,7 @@
             }
             saveLocalDiaries(localList);
 
+            // Supabase 서버 전송 (실시간 공유)
             try {
                 let url = `${SUPABASE_URL}/rest/v1/journal_entries`;
                 let method = "POST";
