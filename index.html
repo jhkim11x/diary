@@ -13,10 +13,9 @@
 
     <title>서둥이네 한줄 일기장</title>
     
-    <!-- Tailwind CSS, Font Awesome, Supabase SDK -->
+    <!-- Tailwind CSS, Font Awesome -->
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -64,7 +63,7 @@
         <!-- 메인 영역 -->
         <main class="flex-1 p-4 space-y-4">
             
-            <!-- 작성자 선택 (아이콘 및 글자 크기 반으로 축소 조절) -->
+            <!-- 작성자 선택 -->
             <section class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
                 <label class="block text-sm font-bold text-gray-600 mb-2">
                     <i class="fa-solid fa-user-group text-indigo-500 mr-1"></i>작성자 선택
@@ -121,17 +120,17 @@
                 <!-- 사진 미리보기 -->
                 <div id="photoPreviewContainer" class="hidden relative inline-block">
                     <img id="photoPreview" class="w-16 h-16 object-cover rounded-xl border border-gray-200 shadow-sm" src="" alt="미리보기">
-                    <button onclick="removePhoto()" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow-md font-bold">✕</button>
+                    <button type="button" onclick="removePhoto()" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow-md font-bold">✕</button>
                 </div>
 
                 <!-- 버튼 영역 -->
                 <div class="flex space-x-2.5">
                     <input type="file" id="photoInput" accept="image/*" class="hidden" onchange="handlePhotoSelect(event)">
-                    <button onclick="document.getElementById('photoInput').click()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 hover:bg-gray-200 transition">
+                    <button type="button" onclick="document.getElementById('photoInput').click()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 hover:bg-gray-200 transition">
                         <i class="fa-solid fa-camera text-indigo-600"></i>
                         <span>사진 첨부</span>
                     </button>
-                    <button id="submitBtn" onclick="saveEntry()" class="flex-[2] py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-md hover:bg-indigo-700 transition">
+                    <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-md hover:bg-indigo-700 transition">
                         <i class="fa-solid fa-paper-plane"></i>
                         <span id="submitBtnText">등록하기</span>
                     </button>
@@ -157,7 +156,7 @@
     </div>
 
     <script>
-        // Supabase DB REST API 정보
+        // Supabase REST API 설정
         const SUPABASE_URL = 'https://gookdripmzsaxfgfigai.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo';
         const REST_ENDPOINT = `${SUPABASE_URL}/rest/v1/journal_entries`;
@@ -175,7 +174,6 @@
             { name: '딸', icon: '👧' }
         ];
 
-        // 저장되었던 작성자 가져오기 (없으면 '아빠')
         let selectedAuthor = localStorage.getItem('seodung_saved_author') || '아빠';
         let attachedPhotoBase64 = null;
         let editingEntryId = null;
@@ -188,7 +186,6 @@
             setInterval(updateClock, 1000);
             checkNotificationPermission();
 
-            // 데이터 수신 및 실시간 3초 탐지
             fetchEntries();
             setInterval(fetchEntries, 3000);
         });
@@ -272,7 +269,11 @@
         async function fetchEntries() {
             try {
                 const response = await fetch(`${REST_ENDPOINT}?select=*&order=created_at.desc`, {
-                    headers: HEADERS
+                    method: 'GET',
+                    headers: {
+                        'apikey': SUPABASE_KEY,
+                        'Authorization': `Bearer ${SUPABASE_KEY}`
+                    }
                 });
 
                 if (response.ok) {
@@ -293,7 +294,7 @@
                     updateCloudStatus(true);
                     return;
                 }
-                throw new Error('Supabase REST API Error');
+                throw new Error('Supabase Fetch Error');
             } catch (err) {
                 const local = localStorage.getItem('seodung_journal');
                 if (local) {
@@ -312,13 +313,21 @@
         }
 
         async function saveEntry() {
-            const content = document.getElementById('journalInput').value.trim();
-            const mood = document.getElementById('moodSelect').value;
+            const contentInput = document.getElementById('journalInput');
+            const moodSelect = document.getElementById('moodSelect');
+            const submitBtn = document.getElementById('submitBtn');
+
+            const content = contentInput.value.trim();
+            const mood = moodSelect.value;
 
             if (!content) {
                 alert('일기 내용을 입력해 주세요!');
                 return;
             }
+
+            // 버튼 비활성화 (중복 클릭 방지)
+            submitBtn.disabled = true;
+            submitBtn.classList.add('opacity-50');
 
             const now = new Date();
             const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
@@ -326,37 +335,54 @@
             const entryData = {
                 author: selectedAuthor,
                 content: content,
-                mood: mood,
-                photo: attachedPhotoBase64,
+                mood: mood || '',
+                photo: attachedPhotoBase64 || '',
                 date: dateStr,
                 created_at: now.toISOString()
             };
 
+            let success = false;
+
             try {
+                let res;
                 if (editingEntryId) {
-                    await fetch(`${REST_ENDPOINT}?id=eq.${editingEntryId}`, {
+                    res = await fetch(`${REST_ENDPOINT}?id=eq.${editingEntryId}`, {
                         method: 'PATCH',
                         headers: HEADERS,
                         body: JSON.stringify(entryData)
                     });
-                    editingEntryId = null;
-                    document.getElementById('submitBtnText').textContent = '등록하기';
                 } else {
-                    await fetch(REST_ENDPOINT, {
+                    res = await fetch(REST_ENDPOINT, {
                         method: 'POST',
                         headers: HEADERS,
                         body: JSON.stringify(entryData)
                     });
                 }
+
+                if (res.ok) {
+                    success = true;
+                } else {
+                    const errText = await res.text();
+                    console.error("Supabase Save Error Response:", errText);
+                    alert("서버 저장에 실패했습니다. (오류: " + res.status + ")\n입력하신 내용은 사라지지 않고 그대로 보관됩니다.");
+                }
             } catch (e) {
                 console.error("Save Error:", e);
+                alert("네트워크 통신 오류가 발생했습니다. 잠시 후 다시 시도해보세요.");
+            } finally {
+                submitBtn.disabled = false;
+                submitBtn.classList.remove('opacity-50');
             }
 
-            document.getElementById('journalInput').value = '';
-            document.getElementById('moodSelect').value = '';
-            removePhoto();
-
-            await fetchEntries();
+            // 서버 등록 성공 시에만 입력창 초기화
+            if (success) {
+                editingEntryId = null;
+                document.getElementById('submitBtnText').textContent = '등록하기';
+                contentInput.value = '';
+                moodSelect.value = '';
+                removePhoto();
+                await fetchEntries();
+            }
         }
 
         function renderEntries() {
@@ -433,7 +459,10 @@
                 try {
                     await fetch(`${REST_ENDPOINT}?id=eq.${id}`, {
                         method: 'DELETE',
-                        headers: HEADERS
+                        headers: {
+                            'apikey': SUPABASE_KEY,
+                            'Authorization': `Bearer ${SUPABASE_KEY}`
+                        }
                     });
                 } catch(e) {}
                 await fetchEntries();
