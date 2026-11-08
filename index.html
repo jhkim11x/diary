@@ -13,10 +13,10 @@
 
     <title>서둥이네 한줄 일기장</title>
     
-    <!-- Tailwind CSS -->
+    <!-- Tailwind CSS, Font Awesome, Supabase SDK -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <style>
         @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard/dist/web/static/pretendard.css');
@@ -53,7 +53,7 @@
                 <button id="notifBtn" onclick="toggleNotification()" class="p-2 rounded-full bg-gray-100 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 transition" title="알림 설정">
                     <i id="notifIcon" class="fa-solid fa-bell-slash text-base"></i>
                 </button>
-                <div id="cloudStatus" class="p-2 rounded-full bg-gray-100 flex items-center justify-center" title="실시간 공유 중">
+                <div id="cloudStatus" class="p-2 rounded-full bg-gray-100 flex items-center justify-center" title="실시간 서버 연결 상태">
                     <span id="cloudDot" class="w-3 h-3 rounded-full bg-emerald-500 animate-pulse"></span>
                 </div>
             </div>
@@ -142,8 +142,9 @@
                     <h2 class="text-xs font-bold text-gray-500">
                         <i class="fa-solid fa-book-open text-indigo-500 mr-1"></i>우리 가족 일기 목록
                     </h2>
-                    <button onclick="loadRemoteData()" class="text-[11px] text-indigo-600 font-medium hover:underline">
-                        🔄 새로고침
+                    <button onclick="fetchEntries()" class="text-[11px] text-indigo-600 font-medium hover:underline flex items-center space-x-1">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span>동기화</span>
                     </button>
                 </div>
                 <div id="entriesList" class="space-y-2">
@@ -154,6 +155,15 @@
     </div>
 
     <script>
+        // --- Supabase 설정 연동 ---
+        const SUPABASE_URL = 'https://gookdripmzsaxfgfigai.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo';
+        
+        let supabaseClient = null;
+        if (window.supabase) {
+            supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        }
+
         const AUTHORS = [
             { name: '아빠', icon: '👨' },
             { name: '엄마', icon: '👩' },
@@ -164,21 +174,17 @@
         let attachedPhotoBase64 = null;
         let editingEntryId = null;
         let entries = [];
-        let lastKnownEntryCount = 0;
-
-        // 무료 공개 공유 데이터베이스 (서둥이네 동기화 전용 키)
-        const BIN_ID = "6741b244ad19ca34f8cf1032"; 
-        const API_URL = `https://api.jsonbin.io/v3/b/${BIN_ID}`;
+        let previousCount = 0;
 
         window.addEventListener('DOMContentLoaded', () => {
             initAuthorButtons();
             updateClock();
             setInterval(updateClock, 1000);
             checkNotificationPermission();
-            
-            // 데이터 로드 및 5초마다 자동 실시간 동기화
-            loadRemoteData();
-            setInterval(loadRemoteData, 5000);
+
+            // DB 데이터 로드 및 2.5초 주기 실시간 공유 감지
+            fetchEntries();
+            setInterval(fetchEntries, 2500);
         });
 
         function initAuthorButtons() {
@@ -222,7 +228,7 @@
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const max_size = 500;
+                    const max_size = 400;
 
                     if (width > height) {
                         if (width > max_size) {
@@ -240,7 +246,7 @@
                     const ctx = canvas.getContext('2d');
                     ctx.drawImage(img, 0, 0, width, height);
 
-                    attachedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.6);
+                    attachedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.5);
                     document.getElementById('photoPreview').src = attachedPhotoBase64;
                     document.getElementById('photoPreviewContainer').classList.remove('hidden');
                 };
@@ -255,45 +261,46 @@
             document.getElementById('photoPreviewContainer').classList.add('hidden');
         }
 
-        // 실시간 클라우드 데이터 읽기 (엄마, 딸, 아빠 공용)
-        async function loadRemoteData() {
+        // Supabase DB 데이터 읽기
+        async function fetchEntries() {
             try {
-                const res = await fetch(`${API_URL}/latest`, {
-                    headers: { "X-Bin-Meta": "false" }
-                });
-                if (res.ok) {
-                    const data = await res.json();
-                    if (Array.isArray(data)) {
-                        // 다른 가족이 새 글을 올렸을 때 알림 띄우기
-                        if (lastKnownEntryCount > 0 && data.length > lastKnownEntryCount) {
-                            const latest = data[0];
-                            if (latest && latest.author !== selectedAuthor) {
-                                triggerPushNotification(`📝 ${latest.author}님의 새 일기!`, latest.content);
-                            }
-                        }
-                        entries = data;
-                        lastKnownEntryCount = data.length;
-                        saveToLocalBackup();
-                        renderEntries();
-                        return;
+                let data = null;
+                if (supabaseClient) {
+                    const res = await supabaseClient.from('journal_entries').select('*').order('created_at', { ascending: false });
+                    if (!res.error && res.data) {
+                        data = res.data;
                     }
                 }
+                
+                // Supabase 연결 불가 시 백업 로컬 스토리지 연동
+                if (!data) {
+                    const local = localStorage.getItem('seodung_journal');
+                    data = local ? JSON.parse(local) : [];
+                }
+
+                // 다른 가족이 새 글 등록 시 알림 팝업 발송
+                if (previousCount > 0 && data.length > previousCount) {
+                    const newest = data[0];
+                    const authorName = typeof newest.author === 'object' ? (newest.author.name || '가족') : newest.author;
+                    if (authorName !== selectedAuthor) {
+                        triggerPushNotification(`📝 ${authorName}님의 새 일기!`, newest.content || '새 일기가 등록되었습니다.');
+                    }
+                }
+
+                entries = data;
+                previousCount = data.length;
+                renderEntries();
+                updateCloudStatus(true);
             } catch (err) {
-                console.log("클라우드 읽기 대기중, 로컬 데이터 불러오기");
+                console.log("DB 로딩 대기 중...");
+                updateCloudStatus(false);
             }
-            loadFromLocalBackup();
         }
 
-        // 실시간 클라우드 데이터 저장 (가족 공동 DB 전송)
-        async function syncRemoteData() {
-            try {
-                await fetch(API_URL, {
-                    method: 'PUT',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(entries)
-                });
-            } catch (err) {
-                console.error("클라우드 동기화 실패:", err);
+        function updateCloudStatus(isOnline) {
+            const dot = document.getElementById('cloudDot');
+            if (dot) {
+                dot.className = isOnline ? "w-3 h-3 rounded-full bg-emerald-500 animate-pulse" : "w-3 h-3 rounded-full bg-amber-400";
             }
         }
 
@@ -309,37 +316,48 @@
             const now = new Date();
             const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+            const entryData = {
+                author: selectedAuthor,
+                content: content,
+                mood: mood,
+                photo: attachedPhotoBase64,
+                date: dateStr,
+                created_at: now.toISOString()
+            };
+
             if (editingEntryId) {
-                const idx = entries.findIndex(e => String(e.id) === String(editingEntryId));
-                if (idx !== -1) {
-                    entries[idx].author = selectedAuthor;
-                    entries[idx].content = content;
-                    entries[idx].mood = mood;
-                    if (attachedPhotoBase64) entries[idx].photo = attachedPhotoBase64;
+                if (supabaseClient) {
+                    await supabaseClient.from('journal_entries').update(entryData).eq('id', editingEntryId);
                 }
+                const idx = entries.findIndex(e => String(e.id) === String(editingEntryId));
+                if (idx !== -1) entries[idx] = { ...entries[idx], ...entryData };
                 editingEntryId = null;
                 document.getElementById('submitBtnText').textContent = '등록하기';
             } else {
-                const newEntry = {
-                    id: Date.now().toString(),
-                    author: selectedAuthor,
-                    content: content,
-                    mood: mood,
-                    photo: attachedPhotoBase64,
-                    date: dateStr,
-                    timestamp: now.getTime()
-                };
-                entries.unshift(newEntry);
+                if (supabaseClient) {
+                    const { data, error } = await supabaseClient.from('journal_entries').insert([entryData]).select();
+                    if (!error && data) {
+                        entries.unshift(data[0]);
+                    } else {
+                        entryData.id = Date.now().toString();
+                        entries.unshift(entryData);
+                    }
+                } else {
+                    entryData.id = Date.now().toString();
+                    entries.unshift(entryData);
+                }
             }
 
-            saveToLocalBackup();
+            localStorage.setItem('seodung_journal', JSON.stringify(entries));
             renderEntries();
-            await syncRemoteData();
 
             // 입력창 초기화
             document.getElementById('journalInput').value = '';
             document.getElementById('moodSelect').value = '';
             removePhoto();
+
+            // 즉시 전 가족 수신 동기화 실행
+            fetchEntries();
         }
 
         function renderEntries() {
@@ -356,7 +374,7 @@
             }
 
             container.innerHTML = entries.map(item => {
-                // 작성자 문자열/객체 세이프 처리 ([object Object] 오류 방지)
+                // 작성자 [object Object] 방지
                 let authorName = typeof item.author === 'object' ? (item.author.name || '가족') : item.author;
                 if (!authorName) authorName = '가족';
 
@@ -413,25 +431,13 @@
         }
 
         async function deleteEntry(id) {
-            if (confirm('이 일기를 정말 삭제하시겠습니까?')) {
+            if (confirm('이 일기를 삭제하시겠습니까? (가족 스마트폰에서도 함께 삭제됩니다)')) {
+                if (supabaseClient) {
+                    await supabaseClient.from('journal_entries').delete().eq('id', id);
+                }
                 entries = entries.filter(e => String(e.id) !== String(id));
-                saveToLocalBackup();
+                localStorage.setItem('seodung_journal', JSON.stringify(entries));
                 renderEntries();
-                await syncRemoteData();
-            }
-        }
-
-        function saveToLocalBackup() {
-            localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
-        }
-
-        function loadFromLocalBackup() {
-            const local = localStorage.getItem('seodung_journal_entries');
-            if (local) {
-                try {
-                    entries = JSON.parse(local);
-                    renderEntries();
-                } catch (e) {}
             }
         }
 
@@ -439,7 +445,7 @@
             return text ? String(text).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;") : '';
         }
 
-        // --- 푸시 알림 제어 ---
+        // --- 실시간 웹 알림 기능 ---
         function checkNotificationPermission() {
             const icon = document.getElementById('notifIcon');
             const btn = document.getElementById('notifBtn');
@@ -454,19 +460,19 @@
 
         function toggleNotification() {
             if (!("Notification" in window)) {
-                alert("이 브라우저는 웹 알림을 지원하지 않습니다.");
+                alert("현재 브라우저는 알림을 지원하지 않습니다.");
                 return;
             }
 
             if (Notification.permission === "granted") {
-                alert("🔔 알림이 정상 설정되어 있습니다! 다른 가족이 작성하면 팝업 알림이 옵니다.");
+                alert("🔔 알림이 켜져 있습니다! 다른 가족이 새 글을 쓰면 팝업 알림이 옵니다.");
             } else {
                 Notification.requestPermission().then(permission => {
                     checkNotificationPermission();
                     if (permission === "granted") {
-                        triggerPushNotification("🔔 알림 설정 완료!", "이제 서둥이네 새 일기 작성 알림이 전송됩니다.");
+                        triggerPushNotification("🔔 가족 알림 켜짐!", "이제 가족이 작성한 새 일기가 즉시 안내됩니다.");
                     } else {
-                        alert("알림 허용이 거부되었습니다. 핸드폰 설정에서 알림 권한을 켜주세요.");
+                        alert("알림 설정이 차단되어 있습니다. 브라우저/핸드폰 설정에서 알림을 허용해 주세요.");
                     }
                 });
             }
