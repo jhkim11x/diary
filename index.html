@@ -1,729 +1,659 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    
-    <!-- 주소창 숨김 및 독립형 앱 설정 (PWA / Fullscreen Mobile App) -->
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="theme-color" content="#ffffff">
-    <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22%EC%84%9C%EB%93%A1%EC%9D%B4%EB%84%A4%20%ED%95%9C%EC%A5%B4%20%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22short_name%22%3A%22%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%234f46e5%22%7D">
-
-    <title>서둥이네 한줄 일기장</title>
-    <!-- Tailwind CSS -->
-    <script src="https://cdn.tailwindcss.com"></script>
-    <!-- FontAwesome Icons -->
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <!-- Google Fonts (Noto Sans KR) -->
-    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
-    <!-- Supabase JS Client library -->
-    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-
-    <script>
-        // -------------------------------------------------------------
-        // Supabase 설정 및 기본 데이터 정의
-        // -------------------------------------------------------------
-        const SUPABASE_URL = "https://gookdripmzsaxfgfigai.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo";
-
-        let supabaseClient = null;
-        window.isCloudMode = false;
-
-        const AUTHORS = [
-            { id: '아빠', name: '아빠', icon: 'fa-user-tie', color: 'bg-blue-500', text: 'text-blue-600', bgLight: 'bg-blue-50', border: 'border-blue-200' },
-            { id: '엄마', name: '엄마', icon: 'fa-user-nurse', color: 'bg-pink-500', text: 'text-pink-600', bgLight: 'bg-pink-50', border: 'border-pink-200' },
-            { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
-        ];
-
-        const TAG_CATEGORIES = [
-            { label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
-            { label: '⚽ 활동 선택', tags: ['가족 나들이 🚗', '맛있는 식사 🍕', '운동/산책 🏃', '영화/TV 🎬', '휴식 ☕', '쇼핑 🛍️', '공부/독서 📚'] }
-        ];
-
-        let entries = [];
-        let selectedAuthor = '아빠';
-        let selectedTags = [];
-        let currentPhotoBase64 = null;
-        let editingEntryId = null;
-
-        // -------------------------------------------------------------
-        // 초기화 함수
-        // -------------------------------------------------------------
-        function initSupabaseSafe() {
-            try {
-                if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL && SUPABASE_KEY) {
-                    supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
-                    window.isCloudMode = true;
-                }
-            } catch (err) {
-                console.warn("Supabase 구동 실패 (로컬 모드로 실행):", err);
-                window.isCloudMode = false;
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            initSupabaseSafe();
-            initializeApp();
-            requestNotificationPermission();
-        });
-
-        if (document.readyState === 'complete' || document.readyState === 'interactive') {
-            setTimeout(() => {
-                if (!window.appInitialized) {
-                    initSupabaseSafe();
-                    initializeApp();
-                    requestNotificationPermission();
-                }
-            }, 100);
-        }
-
-        function initializeApp() {
-            if (window.appInitialized) return;
-            window.appInitialized = true;
-
-            const statusBadge = document.getElementById('cloudStatusBadge');
-            if (statusBadge) {
-                if (window.isCloudMode) {
-                    statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
-                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>`;
-                    statusBadge.title = "실시간 공유 중";
-                } else {
-                    statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
-                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>`;
-                    statusBadge.title = "내 기기 저장 모드";
-                }
-            }
-
-            updateDateTime();
-            setInterval(updateDateTime, 1000);
-            fetchWeather();
-
-            initAuthorSelector();
-            initTagComboSelect();
-            loadEntries();
-            subscribeRealtimeChanges();
-        }
-
-        // -------------------------------------------------------------
-        // 날짜 & 시계 & 날씨
-        // -------------------------------------------------------------
-        function updateDateTime() {
-            const now = new Date();
-            const days = ['일', '월', '화', '수', '목', '금', '토'];
-            const year = now.getFullYear();
-            const month = String(now.getMonth() + 1).padStart(2, '0');
-            const date = String(now.getDate()).padStart(2, '0');
-            const day = days[now.getDay()];
-            const hours = String(now.getHours()).padStart(2, '0');
-            const minutes = String(now.getMinutes()).padStart(2, '0');
-            
-            const element = document.getElementById('currentDateTime');
-            if (element) {
-                element.textContent = `${year}.${month}.${date}(${day}) ${hours}:${minutes}`;
-            }
-        }
-
-        async function fetchWeather() {
-            const weatherEl = document.getElementById('weatherInfo');
-            if (!weatherEl) return;
-            try {
-                const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current_weather=true');
-                const data = await res.json();
-                if (data && data.current_weather) {
-                    const temp = Math.round(data.current_weather.temperature);
-                    const code = data.current_weather.weathercode;
-                    let icon = 'fa-sun text-amber-500';
-                    let text = '맑음';
-                    if (code > 0 && code <= 3) { icon = 'fa-cloud-sun text-slate-400'; text = '구름조금'; }
-                    else if (code > 3 && code < 60) { icon = 'fa-cloud text-slate-500'; text = '흐림'; }
-                    else if (code >= 60) { icon = 'fa-umbrella text-blue-500'; text = '비'; }
-
-                    weatherEl.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${text} ${temp}°C</span>`;
-                }
-            } catch (e) {
-                weatherEl.innerHTML = `<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>`;
-            }
-        }
-
-        // -------------------------------------------------------------
-        // 작성자 & 태그 선택기
-        // -------------------------------------------------------------
-        function initAuthorSelector() {
-            const container = document.getElementById('authorSelector');
-            if (!container) return;
-            container.innerHTML = '';
-
-            AUTHORS.forEach(author => {
-                const isSelected = author.id === selectedAuthor;
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = `flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 font-bold text-xs transition-all ${
-                    isSelected 
-                    ? `${author.color} text-white border-transparent shadow-sm scale-102` 
-                    : `bg-white ${author.text} border-slate-200 hover:bg-slate-50`
-                }`;
-                btn.innerHTML = `<i class="fa-solid ${author.icon}"></i> ${author.name}`;
-                btn.onclick = () => {
-                    selectedAuthor = author.id;
-                    initAuthorSelector();
-                };
-                container.appendChild(btn);
-            });
-        }
-
-        function initTagComboSelect() {
-            const select = document.getElementById('tagComboSelect');
-            if (!select) return;
-            select.innerHTML = '<option value="">-- 기분 또는 활동을 선택하세요 --</option>';
-
-            TAG_CATEGORIES.forEach(cat => {
-                const group = document.createElement('optgroup');
-                group.label = cat.label;
-                cat.tags.forEach(tag => {
-                    const opt = document.createElement('option');
-                    opt.value = tag;
-                    opt.textContent = tag;
-                    group.appendChild(opt);
-                });
-                select.appendChild(group);
-            });
-        }
-
-        function handleTagSelect(event) {
-            const val = event.target.value;
-            if (val && !selectedTags.includes(val)) {
-                selectedTags.push(val);
-                renderSelectedTags();
-            }
-            event.target.value = '';
-        }
-
-        function removeTag(tagToRemove) {
-            selectedTags = selectedTags.filter(t => t !== tagToRemove);
-            renderSelectedTags();
-        }
-
-        function renderSelectedTags() {
-            const container = document.getElementById('selectedTagsContainer');
-            if (!container) return;
-            container.innerHTML = '';
-            selectedTags.forEach(tag => {
-                const badge = document.createElement('span');
-                badge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200";
-                badge.innerHTML = `${tag} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500" onclick="removeTag('${tag}')"></i>`;
-                container.appendChild(badge);
-            });
-        }
-
-        // -------------------------------------------------------------
-        // 웹 푸시 알림
-        // -------------------------------------------------------------
-        function requestNotificationPermission() {
-            if ("Notification" in window) {
-                if (Notification.permission === "default") {
-                    Notification.requestPermission().then(p => updateNotificationBadge(p));
-                } else {
-                    updateNotificationBadge(Notification.permission);
-                }
-            }
-        }
-
-        function updateNotificationBadge(permission) {
-            const btn = document.getElementById('notifToggleBtn');
-            if (!btn) return;
-            if (permission === "granted") {
-                btn.className = "w-7 h-7 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors";
-                btn.innerHTML = `<i class="fa-solid fa-bell text-xs"></i>`;
-                btn.title = "알림 켜짐";
-            } else {
-                btn.className = "w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer";
-                btn.innerHTML = `<i class="fa-solid fa-bell-slash text-xs"></i>`;
-                btn.title = "알림 켜기";
-                btn.onclick = () => {
-                    Notification.requestPermission().then(p => updateNotificationBadge(p));
-                };
-            }
-        }
-
-        function sendWebPushNotification(authorName, textContent) {
-            if ("Notification" in window && Notification.permission === "granted") {
-                const title = `📝 서둥이네 일기장 새 소식!`;
-                const options = {
-                    body: `${authorName}님이 새 일기를 등록했어요:\n"${textContent.slice(0, 40)}..."`,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png'
-                };
-                try { new Notification(title, options); } catch (e) {}
-            }
-        }
-
-        function subscribeRealtimeChanges() {
-            if (window.isCloudMode && supabaseClient) {
-                supabaseClient
-                    .channel('public:journal_entries')
-                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'journal_entries' }, payload => {
-                        const newEntry = payload.new;
-                        if (newEntry) {
-                            const authorName = newEntry.author ? newEntry.author.name : '가족';
-                            if (authorName !== (AUTHORS.find(a => a.id === selectedAuthor)?.name)) {
-                                sendWebPushNotification(authorName, newEntry.content || '');
-                            }
-                            loadEntries();
-                        }
-                    })
-                    .subscribe();
-            }
-        }
-
-        // -------------------------------------------------------------
-        // 이미지 용량 자동 압축
-        // -------------------------------------------------------------
-        function handleImageSelect(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    const canvas = document.createElement('canvas');
-                    let width = img.width;
-                    let height = img.height;
-                    const maxDim = 800;
-
-                    if (width > maxDim || height > maxDim) {
-                        if (width > height) {
-                            height = Math.round((height * maxDim) / width);
-                            width = maxDim;
-                        } else {
-                            width = Math.round((width * maxDim) / height);
-                            height = maxDim;
-                        }
-                    }
-
-                    canvas.width = width;
-                    canvas.height = height;
-                    const ctx = canvas.getContext('2d');
-                    ctx.drawImage(img, 0, 0, width, height);
-
-                    currentPhotoBase64 = canvas.toDataURL('image/jpeg', 0.7);
-                    
-                    const previewImg = document.getElementById('photoPreview');
-                    const previewContainer = document.getElementById('photoPreviewContainer');
-                    if (previewImg && previewContainer) {
-                        previewImg.src = currentPhotoBase64;
-                        previewContainer.classList.remove('hidden');
-                    }
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
-        }
-
-        function removePhoto() {
-            currentPhotoBase64 = null;
-            const previewContainer = document.getElementById('photoPreviewContainer');
-            const fileInput = document.getElementById('photoInput');
-            if (previewContainer) previewContainer.classList.add('hidden');
-            if (fileInput) fileInput.value = '';
-        }
-
-        // -------------------------------------------------------------
-        // 데이터 CRUD (불러오기, 저장, 수정, 삭제)
-        // -------------------------------------------------------------
-        async function loadEntries() {
-            if (window.isCloudMode && supabaseClient) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('journal_entries')
-                        .select('*')
-                        .order('timestamp', { ascending: false });
-
-                    if (!error && data) {
-                        entries = data;
-                        renderEntries();
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("Supabase 데이터 로드 에러:", err);
-                }
-            }
-
-            const local = localStorage.getItem('seodung_journal_entries');
-            entries = local ? JSON.parse(local) : [];
-            renderEntries();
-        }
-
-        function editEntry(id, timestamp) {
-            const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
-            if (!entry) return;
-
-            editingEntryId = id || timestamp;
-            selectedAuthor = entry.author ? entry.author.id : '아빠';
-            selectedTags = entry.tags ? [...entry.tags] : [];
-            currentPhotoBase64 = entry.imageUrl || null;
-
-            const contentInput = document.getElementById('journalContent');
-            if (contentInput) contentInput.value = entry.content || '';
-
-            initAuthorSelector();
-            renderSelectedTags();
-
-            const previewImg = document.getElementById('photoPreview');
-            const previewContainer = document.getElementById('photoPreviewContainer');
-            if (currentPhotoBase64 && previewImg && previewContainer) {
-                previewImg.src = currentPhotoBase64;
-                previewContainer.classList.remove('hidden');
-            } else if (previewContainer) {
-                previewContainer.classList.add('hidden');
-            }
-
-            const submitBtn = document.getElementById('submitBtn');
-            if (submitBtn) {
-                submitBtn.innerHTML = `<i class="fa-solid fa-check text-lg"></i> 수정 완료`;
-                submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-amber-500 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-amber-100 shadow-md hover:bg-amber-600 active:scale-95 transition-all";
-            }
-
-            window.scrollTo({ top: 0, behavior: 'smooth' });
-        }
-
-        function cancelEdit() {
-            editingEntryId = null;
-            const contentInput = document.getElementById('journalContent');
-            if (contentInput) contentInput.value = '';
-            selectedTags = [];
-            renderSelectedTags();
-            removePhoto();
-
-            const submitBtn = document.getElementById('submitBtn');
-            if (submitBtn) {
-                submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane text-xs"></i> 등록하기`;
-                submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all";
-            }
-        }
-
-        async function saveEntry() {
-            const contentInput = document.getElementById('journalContent');
-            const content = contentInput ? contentInput.value.trim() : '';
-
-            if (!content) {
-                alert("일기 내용을 입력해 주세요!");
-                return;
-            }
-
-            const authorObj = AUTHORS.find(a => a.id === selectedAuthor) || AUTHORS[0];
-            const dtText = document.getElementById('currentDateTime')?.textContent || '';
-
-            if (editingEntryId !== null) {
-                const targetEntry = entries.find(e => (e.id && e.id === editingEntryId) || (e.timestamp && e.timestamp === editingEntryId));
-                if (targetEntry) {
-                    targetEntry.author = authorObj;
-                    targetEntry.tags = [...selectedTags];
-                    targetEntry.content = content;
-                    targetEntry.imageUrl = currentPhotoBase64;
-
-                    if (window.isCloudMode && supabaseClient && targetEntry.id) {
-                        try {
-                            await supabaseClient
-                                .from('journal_entries')
-                                .update({
-                                    author: authorObj,
-                                    tags: [...selectedTags],
-                                    content: content,
-                                    imageUrl: currentPhotoBase64
-                                })
-                                .eq('id', targetEntry.id);
-                        } catch (err) {
-                            console.error("클라우드 수정 실패:", err);
-                        }
-                    }
-                    saveToLocalStorage();
-                }
-                cancelEdit();
-                renderEntries();
-                return;
-            }
-
-            const newEntry = {
-                timestamp: Date.now(),
-                author: authorObj,
-                dateTimeStr: dtText,
-                tags: [...selectedTags],
-                content: content,
-                imageUrl: currentPhotoBase64
-            };
-
-            if (window.isCloudMode && supabaseClient) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('journal_entries')
-                        .insert([newEntry])
-                        .select();
-
-                    if (error) throw error;
-                    if (data && data[0]) {
-                        entries.unshift(data[0]);
-                    } else {
-                        entries.unshift(newEntry);
-                    }
-                } catch (err) {
-                    console.error("클라우드 저장 실패:", err);
-                    entries.unshift(newEntry);
-                    saveToLocalStorage();
-                }
-            } else {
-                entries.unshift(newEntry);
-                saveToLocalStorage();
-            }
-
-            cancelEdit();
-            renderEntries();
-        }
-
-        function saveToLocalStorage() {
-            localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
-        }
-
-        async function deleteEntry(id, timestamp) {
-            if (!confirm("이 일기를 삭제하시겠습니까?")) return;
-
-            if (window.isCloudMode && supabaseClient && id) {
-                try {
-                    await supabaseClient
-                        .from('journal_entries')
-                        .delete()
-                        .eq('id', id);
-                } catch (err) {
-                    console.error("클라우드 삭제 실패:", err);
-                }
-            }
-
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
-            saveToLocalStorage();
-            renderEntries();
-        }
-
-        // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (사진 1/4 크기, 글 우측 side-by-side 배치)
-        // -------------------------------------------------------------
-        function renderEntries() {
-            const container = document.getElementById('entriesContainer');
-            if (!container) return;
-            container.innerHTML = '';
-
-            if (entries.length === 0) {
-                container.innerHTML = `
-                    <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                        <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
-                        <p class="text-base font-medium">아직 등록된 일기가 없습니다.</p>
-                        <p class="text-xs text-slate-400 mt-0.5">오늘의 첫 일기를 남겨보세요!</p>
-                    </div>
-                `;
-                return;
-            }
-
-            entries.forEach(entry => {
-                const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow';
-
-                const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
-
-                let tagsHTML = '';
-                if (entry.tags && entry.tags.length > 0) {
-                    tagsHTML = `<div class="flex flex-wrap gap-1">` +
-                        entry.tags.map(t => `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">${t}</span>`).join('') +
-                        `</div>`;
-                }
-
-                let contentBodyHTML = `
-                    <div class="flex gap-3 items-start">
-                        <div class="flex-1">
-                            <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
-                        </div>
-                        ${entry.imageUrl ? `
-                            <div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
-                                <img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-full object-cover">
-                            </div>
-                        ` : ''}
-                    </div>
-                `;
-
-                card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <div class="flex items-center gap-2">
-                            <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border}">
-                                <i class="fa-solid ${author.icon}"></i>
-                            </span>
-                            <div>
-                                <span class="font-bold text-slate-800 text-sm">${author.name}</span>
-                                <span class="text-[11px] text-slate-400 block">${entry.dateTimeStr || ''}</span>
-                            </div>
-                        </div>
-                        <div class="flex items-center gap-0.5">
-                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
-                                <i class="fa-solid fa-pen text-xs"></i>
-                            </button>
-                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
-                                <i class="fa-solid fa-trash-can text-xs"></i>
-                            </button>
-                        </div>
-                    </div>
-
-                    ${tagsHTML}
-                    ${contentBodyHTML}
-                `;
-
-                container.appendChild(card);
-            });
-        }
-
-        // -------------------------------------------------------------
-        // 백업 & 데이터 파일 불러오기
-        // -------------------------------------------------------------
-        function downloadBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entries, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `서둥이네_일기장_백업_${new Date().toISOString().slice(0,10)}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-        }
-
-        function uploadBackup(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedEntries = JSON.parse(e.target.result);
-                    if (Array.isArray(importedEntries)) {
-                        entries = importedEntries;
-                        saveToLocalStorage();
-                        renderEntries();
-                        alert("백업 데이터를 성공적으로 불러왔습니다!");
-                    } else {
-                        alert("올바르지 않은 파일 형식입니다.");
-                    }
-                } catch (err) {
-                    alert("파일을 읽는 중 오류가 발생했습니다.");
-                }
-            };
-            reader.readAsText(file);
-        }
-    </script>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+​<!-- 주소창 숨김 및 독립형 앱 설정 (PWA / Fullscreen Mobile App) -->
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="theme-color" content="#ffffff">
+<link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22%EC%84%9C%EB%93%A1%EC%9D%B4%EB%84%A4%20%ED%95%9C%EC%A5%B4%20%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22short_name%22%3A%22%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%234f46e5%22%7D">
+​<title>서둥이네 한줄 일기장</title>
+<!-- Tailwind CSS -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- FontAwesome Icons -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<!-- Google Fonts (Noto Sans KR) -->
+<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+​<!-- Supabase JS Client library -->
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+​<script>
+// -------------------------------------------------------------
+// Supabase 설정 및 기본 데이터 정의
+// -------------------------------------------------------------
+const SUPABASE_URL = "https://gookdripmzsaxfgfigai.supabase.co";
+const SUPABASE_KEY = "sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo";
+​let supabaseClient = null;
+window.isCloudMode = false;
+let notifEnabled = false;
+​const AUTHORS = [
+{ id: '아빠', name: '아빠', icon: 'fa-user-tie', color: 'bg-blue-500', text: 'text-blue-600', bgLight: 'bg-blue-50', border: 'border-blue-200' },
+{ id: '엄마', name: '엄마', icon: 'fa-user-nurse', color: 'bg-pink-500', text: 'text-pink-600', bgLight: 'bg-pink-50', border: 'border-pink-200' },
+{ id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
+];
+​const TAG_CATEGORIES = [
+{ label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
+{ label: '⚽ 활동 선택', tags: ['가족 나들이 🚗', '맛있는 식사 🍕', '운동/산책 🏃', '영화/TV 🎬', '휴식 ☕', '쇼핑 🛍️', '공부/독서 📚'] }
+];
+​let entries = [];
+let selectedAuthor = '아빠';
+let selectedTags = [];
+let currentPhotoBase64 = null;
+let editingEntryId = null;
+​// -------------------------------------------------------------
+// 초기화 함수
+// -------------------------------------------------------------
+function initSupabaseSafe() {
+try {
+if (window.supabase && typeof window.supabase.createClient === 'function' && SUPABASE_URL && SUPABASE_KEY) {
+supabaseClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+window.isCloudMode = true;
+}
+} catch (err) {
+console.warn("Supabase 구동 실패 (로컬 모드로 실행):", err);
+window.isCloudMode = false;
+}
+}
+​window.addEventListener('DOMContentLoaded', () => {
+initSupabaseSafe();
+initializeApp();
+checkNotificationStatus();
+});
+​if (document.readyState === 'complete' || document.readyState === 'interactive') {
+setTimeout(() => {
+if (!window.appInitialized) {
+initSupabaseSafe();
+initializeApp();
+checkNotificationStatus();
+}
+}, 100);
+}
+​function initializeApp() {
+if (window.appInitialized) return;
+window.appInitialized = true;
+​const statusBadge = document.getElementById('cloudStatusBadge');
+if (statusBadge) {
+if (window.isCloudMode) {
+statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
+statusBadge.innerHTML = <span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>;
+statusBadge.title = "실시간 공유 중";
+} else {
+statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
+statusBadge.innerHTML = <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>;
+statusBadge.title = "내 기기 저장 모드";
+}
+}
+​updateDateTime();
+setInterval(updateDateTime, 1000);
+fetchWeather();
+​initAuthorSelector();
+initTagComboSelect();
+loadEntries();
+subscribeRealtimeChanges();
+}
+​// -------------------------------------------------------------
+// 날짜 & 시계 & 날씨
+// -------------------------------------------------------------
+function updateDateTime() {
+const now = new Date();
+const days = ['일', '월', '화', '수', '목', '금', '토'];
+const year = now.getFullYear();
+const month = String(now.getMonth() + 1).padStart(2, '0');
+const date = String(now.getDate()).padStart(2, '0');
+const day = days[now.getDay()];
+const hours = String(now.getHours()).padStart(2, '0');
+const minutes = String(now.getMinutes()).padStart(2, '0');
+​const element = document.getElementById('currentDateTime');
+if (element) {
+element.textContent = ${year}.${month}.${date}(${day}) ${hours}:${minutes};
+}
+}
+​async function fetchWeather() {
+const weatherEl = document.getElementById('weatherInfo');
+if (!weatherEl) return;
+try {
+const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current_weather=true');
+const data = await res.json();
+if (data && data.current_weather) {
+const temp = Math.round(data.current_weather.temperature);
+const code = data.current_weather.weathercode;
+let icon = 'fa-sun text-amber-500';
+let text = '맑음';
+if (code > 0 && code <= 3) { icon = 'fa-cloud-sun text-slate-400'; text = '구름조금'; }
+else if (code > 3 && code < 60) { icon = 'fa-cloud text-slate-500'; text = '흐림'; }
+else if (code >= 60) { icon = 'fa-umbrella text-blue-500'; text = '비'; }
+​weatherEl.innerHTML = <i class="fa-solid ${icon}"></i> <span>${text} ${temp}°C</span>;
+}
+} catch (e) {
+weatherEl.innerHTML = <i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>;
+}
+}
+​// -------------------------------------------------------------
+// 작성자 & 태그 선택기
+// -------------------------------------------------------------
+function initAuthorSelector() {
+const container = document.getElementById('authorSelector');
+if (!container) return;
+container.innerHTML = '';
+​AUTHORS.forEach(author => {
+const isSelected = author.id === selectedAuthor;
+const btn = document.createElement('button');
+btn.type = 'button';
+btn.className = flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 font-bold text-xs transition-all ${ isSelected  ? ${author.color} text-white border-transparent shadow-sm scale-102 :bg-white ${author.text} border-slate-200 hover:bg-slate-50 };
+btn.innerHTML = <i class="fa-solid ${author.icon}"></i> ${author.name};
+btn.onclick = () => {
+selectedAuthor = author.id;
+initAuthorSelector();
+};
+container.appendChild(btn);
+});
+}
+​function initTagComboSelect() {
+const select = document.getElementById('tagComboSelect');
+if (!select) return;
+select.innerHTML = '<option value="">-- 기분 또는 활동을 선택하세요 --</option>';
+​TAG_CATEGORIES.forEach(cat => {
+const group = document.createElement('optgroup');
+group.label = cat.label;
+cat.tags.forEach(tag => {
+const opt = document.createElement('option');
+opt.value = tag;
+opt.textContent = tag;
+group.appendChild(opt);
+});
+select.appendChild(group);
+});
+}
+​function handleTagSelect(event) {
+const val = event.target.value;
+if (val && !selectedTags.includes(val)) {
+selectedTags.push(val);
+renderSelectedTags();
+}
+event.target.value = '';
+}
+​function removeTag(tagToRemove) {
+selectedTags = selectedTags.filter(t => t !== tagToRemove);
+renderSelectedTags();
+}
+​function renderSelectedTags() {
+const container = document.getElementById('selectedTagsContainer');
+if (!container) return;
+container.innerHTML = '';
+selectedTags.forEach(tag => {
+const badge = document.createElement('span');
+badge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200";
+badge.innerHTML = ${tag} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500" onclick="removeTag('${tag}')"></i>;
+container.appendChild(badge);
+});
+}
+​// -------------------------------------------------------------
+// 웹 푸시 알림 제어 (토글 및 브라우저 API 호출)
+// -------------------------------------------------------------
+function checkNotificationStatus() {
+if ("Notification" in window) {
+if (Notification.permission === "granted") {
+notifEnabled = true;
+renderNotifBtn(true);
+} else {
+notifEnabled = false;
+renderNotifBtn(false);
+}
+} else {
+renderNotifBtn(false);
+}
+}
+​function toggleNotification() {
+if (!("Notification" in window)) {
+alert("이 스마트폰 브라우저는 웹 알림 기능을 지원하지 않습니다.");
+return;
+}
+​if (Notification.permission === "granted") {
+notifEnabled = !notifEnabled;
+renderNotifBtn(notifEnabled);
+if (notifEnabled) {
+try { new Notification("서둥이네 일기장", { body: "알림이 켜졌습니다! 가족 소식을 즉시 받아보세요. 🔔" }); } catch (e) {}
+}
+} else if (Notification.permission === "denied") {
+alert("브라우저에서 알림이 차단되어 있습니다.\n스마트폰 [설정] -> [애플리케이션] -> 브라우저 알림 허용을 켜주세요!");
+} else {
+Notification.requestPermission().then(permission => {
+if (permission === "granted") {
+notifEnabled = true;
+renderNotifBtn(true);
+try { new Notification("서둥이네 일기장", { body: "알림 수신 설정이 완료되었습니다! 🔔" }); } catch (e) {}
+} else {
+notifEnabled = false;
+renderNotifBtn(false);
+}
+});
+}
+}
+​function renderNotifBtn(isEnabled) {
+const btn = document.getElementById('notifToggleBtn');
+if (!btn) return;
+if (isEnabled) {
+btn.className = "w-7 h-7 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors shadow-sm cursor-pointer";
+btn.innerHTML = <i class="fa-solid fa-bell text-xs"></i>;
+btn.title = "알림 켜짐 (클릭하여 끄기/켜기)";
+} else {
+btn.className = "w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer";
+btn.innerHTML = <i class="fa-solid fa-bell-slash text-xs"></i>;
+btn.title = "알림 꺼짐 (클릭하여 켜기)";
+}
+}
+​function sendWebPushNotification(authorName, textContent) {
+if ("Notification" in window && Notification.permission === "granted" && notifEnabled) {
+const title = 📝 서둥이네 일기장;
+const options = {
+body: ${authorName}님이 새 일기를 등록했습니다!\n"${textContent ? textContent.slice(0, 35) : '사진 첨부됨'}...",
+icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png',
+vibrate: [200, 100, 200]
+};
+try {
+new Notification(title, options);
+} catch (e) {
+console.warn("알림 발송 실패:", e);
+}
+}
+}
+​function subscribeRealtimeChanges() {
+if (window.isCloudMode && supabaseClient) {
+supabaseClient
+.channel('public:journal_entries')
+.on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'journal_entries' }, payload => {
+const newEntry = payload.new;
+if (newEntry) {
+const authorName = newEntry.author ? newEntry.author.name : '가족';
+const currentMyAuthor = AUTHORS.find(a => a.id === selectedAuthor)?.name;
+if (authorName !== currentMyAuthor) {
+sendWebPushNotification(authorName, newEntry.content || '');
+}
+loadEntries();
+}
+})
+.subscribe();
+}
+}
+​// -------------------------------------------------------------
+// 이미지 용량 자동 압축
+// -------------------------------------------------------------
+function handleImageSelect(event) {
+const file = event.target.files[0];
+if (!file) return;
+​const reader = new FileReader();
+reader.onload = function(e) {
+const img = new Image();
+img.onload = function() {
+const canvas = document.createElement('canvas');
+let width = img.width;
+let height = img.height;
+const maxDim = 800;
+​if (width > maxDim || height > maxDim) {
+if (width > height) {
+height = Math.round((height * maxDim) / width);
+width = maxDim;
+} else {
+width = Math.round((width * maxDim) / height);
+height = maxDim;
+}
+}
+​canvas.width = width;
+canvas.height = height;
+const ctx = canvas.getContext('2d');
+ctx.drawImage(img, 0, 0, width, height);
+​currentPhotoBase64 = canvas.toDataURL('image/jpeg', 0.7);
+​const previewImg = document.getElementById('photoPreview');
+const previewContainer = document.getElementById('photoPreviewContainer');
+if (previewImg && previewContainer) {
+previewImg.src = currentPhotoBase64;
+previewContainer.classList.remove('hidden');
+}
+};
+img.src = e.target.result;
+};
+reader.readAsDataURL(file);
+}
+​function removePhoto() {
+currentPhotoBase64 = null;
+const previewContainer = document.getElementById('photoPreviewContainer');
+const fileInput = document.getElementById('photoInput');
+if (previewContainer) previewContainer.classList.add('hidden');
+if (fileInput) fileInput.value = '';
+}
+​// -------------------------------------------------------------
+// 데이터 CRUD (불러오기, 저장, 수정, 삭제)
+// -------------------------------------------------------------
+async function loadEntries() {
+if (window.isCloudMode && supabaseClient) {
+try {
+const { data, error } = await supabaseClient
+.from('journal_entries')
+.select('*')
+.order('timestamp', { ascending: false });
+​if (!error && data) {
+entries = data;
+renderEntries();
+return;
+}
+} catch (err) {
+console.warn("Supabase 데이터 로드 에러:", err);
+}
+}
+​const local = localStorage.getItem('seodung_journal_entries');
+entries = local ? JSON.parse(local) : [];
+renderEntries();
+}
+​function editEntry(id, timestamp) {
+const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
+if (!entry) return;
+​editingEntryId = id || timestamp;
+selectedAuthor = entry.author ? entry.author.id : '아빠';
+selectedTags = entry.tags ? [...entry.tags] : [];
+currentPhotoBase64 = entry.imageUrl || null;
+​const contentInput = document.getElementById('journalContent');
+if (contentInput) contentInput.value = entry.content || '';
+​initAuthorSelector();
+renderSelectedTags();
+​const previewImg = document.getElementById('photoPreview');
+const previewContainer = document.getElementById('photoPreviewContainer');
+if (currentPhotoBase64 && previewImg && previewContainer) {
+previewImg.src = currentPhotoBase64;
+previewContainer.classList.remove('hidden');
+} else if (previewContainer) {
+previewContainer.classList.add('hidden');
+}
+​const submitBtn = document.getElementById('submitBtn');
+if (submitBtn) {
+submitBtn.innerHTML = <i class="fa-solid fa-check text-lg"></i> 수정 완료;
+submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-amber-500 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-amber-100 shadow-md hover:bg-amber-600 active:scale-95 transition-all";
+}
+​window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+​function cancelEdit() {
+editingEntryId = null;
+const contentInput = document.getElementById('journalContent');
+if (contentInput) contentInput.value = '';
+selectedTags = [];
+renderSelectedTags();
+removePhoto();
+​const submitBtn = document.getElementById('submitBtn');
+if (submitBtn) {
+submitBtn.innerHTML = <i class="fa-solid fa-paper-plane text-xs"></i> 등록하기;
+submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all";
+}
+}
+​async function saveEntry() {
+const contentInput = document.getElementById('journalContent');
+const content = contentInput ? contentInput.value.trim() : '';
+​if (!content) {
+alert("일기 내용을 입력해 주세요!");
+return;
+}
+​const authorObj = AUTHORS.find(a => a.id === selectedAuthor) || AUTHORS[0];
+const dtText = document.getElementById('currentDateTime')?.textContent || '';
+​if (editingEntryId !== null) {
+const targetEntry = entries.find(e => (e.id && e.id === editingEntryId) || (e.timestamp && e.timestamp === editingEntryId));
+if (targetEntry) {
+targetEntry.author = authorObj;
+targetEntry.tags = [...selectedTags];
+targetEntry.content = content;
+targetEntry.imageUrl = currentPhotoBase64;
+​if (window.isCloudMode && supabaseClient && targetEntry.id) {
+try {
+await supabaseClient
+.from('journal_entries')
+.update({
+author: authorObj,
+tags: [...selectedTags],
+content: content,
+imageUrl: currentPhotoBase64
+})
+.eq('id', targetEntry.id);
+} catch (err) {
+console.error("클라우드 수정 실패:", err);
+}
+}
+saveToLocalStorage();
+}
+cancelEdit();
+renderEntries();
+return;
+}
+​const newEntry = {
+timestamp: Date.now(),
+author: authorObj,
+dateTimeStr: dtText,
+tags: [...selectedTags],
+content: content,
+imageUrl: currentPhotoBase64
+};
+​if (window.isCloudMode && supabaseClient) {
+try {
+const { data, error } = await supabaseClient
+.from('journal_entries')
+.insert([newEntry])
+.select();
+​if (error) throw error;
+if (data && data[0]) {
+entries.unshift(data[0]);
+} else {
+entries.unshift(newEntry);
+}
+} catch (err) {
+console.error("클라우드 저장 실패:", err);
+entries.unshift(newEntry);
+saveToLocalStorage();
+}
+} else {
+entries.unshift(newEntry);
+saveToLocalStorage();
+}
+​cancelEdit();
+renderEntries();
+}
+​function saveToLocalStorage() {
+localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
+}
+​async function deleteEntry(id, timestamp) {
+if (!confirm("이 일기를 삭제하시겠습니까?")) return;
+​if (window.isCloudMode && supabaseClient && id) {
+try {
+await supabaseClient
+.from('journal_entries')
+.delete()
+.eq('id', id);
+} catch (err) {
+console.error("클라우드 삭제 실패:", err);
+}
+}
+​entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
+saveToLocalStorage();
+renderEntries();
+}
+​// -------------------------------------------------------------
+// 일기 리스트 화면 출력 (사진 1/4 크기, 글 우측 side-by-side 배치)
+// -------------------------------------------------------------
+function renderEntries() {
+const container = document.getElementById('entriesContainer');
+if (!container) return;
+container.innerHTML = '';
+​if (entries.length === 0) {
+container.innerHTML = <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm"> <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i> <p class="text-base font-medium">아직 등록된 일기가 없습니다.</p> <p class="text-xs text-slate-400 mt-0.5">오늘의 첫 일기를 남겨보세요!</p> </div>;
+return;
+}
+​entries.forEach(entry => {
+const card = document.createElement('div');
+card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow';
+​const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
+​let tagsHTML = '';
+if (entry.tags && entry.tags.length > 0) {
+tagsHTML = <div class="flex flex-wrap gap-1"> +
+entry.tags.map(t => <span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">${t}</span>).join('') +
+</div>;
+}
+​let contentBodyHTML = <div class="flex gap-3 items-start"> <div class="flex-1"> <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p> </div> ${entry.imageUrl ?
+<div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+<img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-full object-cover">
+</div>
+: ''} </div>;
+​card.innerHTML = `
+<div class="flex items-center justify-between border-b border-slate-100 pb-2">
+<div class="flex items-center gap-2">
+<span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border}">
+<i class="fa-solid ${author.icon}"></i>
+</span>
+<div>
+<span class="font-bold text-slate-800 text-sm">{author.name}</span>
+<span class="text-[11px] text-slate-400 block">{entry.dateTimeStr || ''}</span>
+</div>
+</div>
+<div class="flex items-center gap-0.5">
+<button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
+<i class="fa-solid fa-pen text-xs"></i>
+</button>
+<button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
+<i class="fa-solid fa-trash-can text-xs"></i>
+</button>
+</div>
+</div>
+​${tagsHTML}
+${contentBodyHTML}
+`;
+​container.appendChild(card);
+});
+}
+​// -------------------------------------------------------------
+// 백업 & 데이터 파일 불러오기
+// -------------------------------------------------------------
+function downloadBackup() {
+const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entries, null, 2));
+const downloadAnchor = document.createElement('a');
+downloadAnchor.setAttribute("href", dataStr);
+downloadAnchor.setAttribute("download", 서둥이네_일기장_백업_${new Date().toISOString().slice(0,10)}.json);
+document.body.appendChild(downloadAnchor);
+downloadAnchor.click();
+downloadAnchor.remove();
+}
+​function uploadBackup(event) {
+const file = event.target.files[0];
+if (!file) return;
+​const reader = new FileReader();
+reader.onload = function(e) {
+try {
+const importedEntries = JSON.parse(e.target.result);
+if (Array.isArray(importedEntries)) {
+entries = importedEntries;
+saveToLocalStorage();
+renderEntries();
+alert("백업 데이터를 성공적으로 불러왔습니다!");
+} else {
+alert("올바르지 않은 파일 형식입니다.");
+}
+} catch (err) {
+alert("파일을 읽는 중 오류가 발생했습니다.");
+}
+};
+reader.readAsText(file);
+}
+</script>
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 font-['Noto_Sans_KR'] antialiased">
-    <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col shadow-lg border-x border-slate-200">
-        
-        <!-- Header -->
-        <header class="bg-white px-3.5 py-2.5 border-b border-slate-200 sticky top-0 z-10 shadow-sm flex items-center justify-between">
-            <div class="flex items-center gap-2.5">
-                <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-indigo-100 shadow-sm">
-                    <i class="fa-solid fa-book-open text-sm"></i>
-                </div>
-                <div>
-                    <h1 class="font-bold text-base text-slate-800 tracking-tight leading-none">서둥이네 한줄 일기장</h1>
-                    <p class="text-[11px] text-slate-400 mt-0.5">우리 가족 하루 기록하기</p>
-                </div>
-            </div>
-
-            <!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
-            <div class="flex items-center gap-1.5">
-                <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
-                    <i class="fa-solid fa-bell-slash text-xs"></i>
-                </button>
-                <div id="cloudStatusBadge" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm" title="연결 확인 중">
-                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
-                </div>
-            </div>
-        </header>
-
-        <!-- Main Body -->
-        <main class="flex-1 p-2.5 flex flex-col gap-2.5">
-            
-            <!-- 작성자 선택 -->
-            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
-                <label class="block text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1">
-                    <i class="fa-solid fa-user-tag text-indigo-500"></i> 작성자 선택
-                </label>
-                <div id="authorSelector" class="flex gap-1.5"></div>
-            </section>
-
-            <!-- 일시 및 날씨 -->
-            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between text-xs font-semibold text-slate-600">
-                <div class="flex items-center gap-1.5 text-sm">
-                    <i class="fa-regular fa-calendar-days text-indigo-500 text-base"></i>
-                    <span id="currentDateTime">2026.11.08(일) 00:00</span>
-                </div>
-                <div id="weatherInfo" class="flex items-center gap-1 text-slate-600">
-                    <i class="fa-solid fa-sun text-amber-500"></i> <span>맑음</span>
-                </div>
-            </section>
-
-            <!-- 기분 & 활동 콤보박스 -->
-            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
-                    <i class="fa-solid fa-face-smile text-amber-500"></i> 기분 & 활동 선택
-                </label>
-                <select id="tagComboSelect" onchange="handleTagSelect(event)" class="w-full p-2.5 rounded-lg border border-slate-300 text-slate-700 bg-slate-50 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
-                <div id="selectedTagsContainer" class="flex flex-wrap gap-1.5 min-h-[24px] items-center"></div>
-            </section>
-
-            <!-- 일기 입력 & 사진 첨부 -->
-            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                <div class="flex items-center justify-between">
-                    <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
-                        <i class="fa-solid fa-pen-to-square text-indigo-500"></i> 오늘 일기쓰기
-                    </label>
-                    <span class="text-[11px] text-indigo-500 font-bold">* 하루 한 장 사진 첨부</span>
-                </div>
-                
-                <textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
-
-                <!-- 사진 미리보기 (썸네일 크기) -->
-                <div id="photoPreviewContainer" class="relative hidden w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
-                    <img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full h-full object-cover">
-                    <button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
-                        <i class="fa-solid fa-xmark text-[10px]"></i>
-                    </button>
-                </div>
-
-                <!-- 하단 버튼들 -->
-                <div class="flex items-center gap-1.5 pt-0.5">
-                    <label for="photoInput" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
-                        <i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 첨부
-                    </label>
-                    <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
-
-                    <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
-                        <i class="fa-solid fa-paper-plane text-xs"></i> 등록하기
-                    </button>
-                </div>
-            </section>
-
-            <!-- 백업/불러오기 -->
-            <section class="flex gap-1.5">
-                <button type="button" onclick="downloadBackup()" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50">
-                    <i class="fa-solid fa-download text-indigo-500"></i> 백업 받기
-                </button>
-                <label for="backupInput" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer">
-                    <i class="fa-solid fa-upload text-indigo-500"></i> 불러오기
-                </label>
-                <input type="file" id="backupInput" accept=".json" onchange="uploadBackup(event)" class="hidden">
-            </section>
-
-            <!-- 일기 리스트 -->
-            <section class="flex flex-col gap-2 mt-1">
-                <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1 px-1">
-                    <i class="fa-solid fa-list-ul text-indigo-500"></i> 우리 가족 일기 목록
-                </h2>
-                <div id="entriesContainer" class="flex flex-col gap-2"></div>
-            </section>
-        </main>
-    </div>
+<div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col shadow-lg border-x border-slate-200">
+​<!-- Header -->
+<header class="bg-white px-3.5 py-2.5 border-b border-slate-200 sticky top-0 z-10 shadow-sm flex items-center justify-between">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-indigo-100 shadow-sm">
+<i class="fa-solid fa-book-open text-sm"></i>
+</div>
+<div>
+<h1 class="font-bold text-base text-slate-800 tracking-tight leading-none">서둥이네 한줄 일기장</h1>
+<p class="text-[11px] text-slate-400 mt-0.5">우리 가족 하루 기록하기</p>
+</div>
+</div>
+​<!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
+<div class="flex items-center gap-1.5">
+<button id="notifToggleBtn" onclick="toggleNotification()" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer" title="알림 토글">
+<i class="fa-solid fa-bell-slash text-xs"></i>
+</button>
+<div id="cloudStatusBadge" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm" title="연결 확인 중">
+<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+</div>
+</div>
+</header>
+​<!-- Main Body -->
+<main class="flex-1 p-2.5 flex flex-col gap-2.5">
+​<!-- 작성자 선택 -->
+<section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+<label class="block text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1">
+<i class="fa-solid fa-user-tag text-indigo-500"></i> 작성자 선택
+</label>
+<div id="authorSelector" class="flex gap-1.5"></div>
+</section>
+​<!-- 일시 및 날씨 -->
+<section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between text-xs font-semibold text-slate-600">
+<div class="flex items-center gap-1.5 text-sm">
+<i class="fa-regular fa-calendar-days text-indigo-500 text-base"></i>
+<span id="currentDateTime">2026.11.08(일) 00:00</span>
+</div>
+<div id="weatherInfo" class="flex items-center gap-1 text-slate-600">
+<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음</span>
+</div>
+</section>
+​<!-- 기분 & 활동 콤보박스 -->
+<section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+<label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
+<i class="fa-solid fa-face-smile text-amber-500"></i> 기분 & 활동 선택
+</label>
+<select id="tagComboSelect" onchange="handleTagSelect(event)" class="w-full p-2.5 rounded-lg border border-slate-300 text-slate-700 bg-slate-50 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+<div id="selectedTagsContainer" class="flex flex-wrap gap-1.5 min-h-[24px] items-center"></div>
+</section>
+​<!-- 일기 입력 & 사진 첨부 -->
+<section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+<div class="flex items-center justify-between">
+<label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
+<i class="fa-solid fa-pen-to-square text-indigo-500"></i> 오늘 일기쓰기
+</label>
+<span class="text-[11px] text-indigo-500 font-bold">* 하루 한 장 사진 첨부</span>
+</div>
+​<textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
+​<!-- 사진 미리보기 (썸네일 크기) -->
+<div id="photoPreviewContainer" class="relative hidden w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+<img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full h-full object-cover">
+<button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
+<i class="fa-solid fa-xmark text-[10px]"></i>
+</button>
+</div>
+​<!-- 하단 버튼들 -->
+<div class="flex items-center gap-1.5 pt-0.5">
+<label for="photoInput" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
+<i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 첨부
+</label>
+<input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
+​<button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
+<i class="fa-solid fa-paper-plane text-xs"></i> 등록하기
+</button>
+</div>
+</section>
+​<!-- 백업/불러오기 -->
+<section class="flex gap-1.5">
+<button type="button" onclick="downloadBackup()" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50">
+<i class="fa-solid fa-download text-indigo-500"></i> 백업 받기
+</button>
+<label for="backupInput" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer">
+<i class="fa-solid fa-upload text-indigo-500"></i> 불러오기
+</label>
+<input type="file" id="backupInput" accept=".json" onchange="uploadBackup(event)" class="hidden">
+</section>
+​<!-- 일기 리스트 -->
+<section class="flex flex-col gap-2 mt-1">
+<h2 class="text-xs font-bold text-slate-500 flex items-center gap-1 px-1">
+<i class="fa-solid fa-list-ul text-indigo-500"></i> 우리 가족 일기 목록
+</h2>
+<div id="entriesContainer" class="flex flex-col gap-2"></div>
+</section>
+</main>
+</div>
 </body>
 </html>
