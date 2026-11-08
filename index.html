@@ -90,13 +90,6 @@
                 </div>
             </div>
         </section>
-
-        <!-- Bottom Quick Copy Button -->
-        <div class="pt-2">
-            <button onclick="copyEntireCode()" class="w-full py-3.5 px-3 bg-slate-800 hover:bg-slate-900 text-white text-base font-bold rounded-xl shadow transition flex items-center justify-center space-x-2">
-                <span>📋 이 코드 전체 복사하기</span>
-            </button>
-        </div>
     </div>
 
     <script>
@@ -110,6 +103,7 @@
             initDate();
             initAuthorUI();
             loadDiaries();
+            setInterval(loadDiaries, 3000); // 3초마다 실시간 동기화
         });
 
         function initDate() {
@@ -141,33 +135,26 @@
 
         function getLocalDiaries() {
             try {
-                return JSON.parse(localStorage.getItem("family_diaries_master_v7") || "[]");
+                return JSON.parse(localStorage.getItem("family_diaries_v8") || "[]");
             } catch(e) {
                 return [];
             }
         }
 
         function saveLocalDiaries(list) {
-            localStorage.setItem("family_diaries_master_v7", JSON.stringify(list));
+            localStorage.setItem("family_diaries_v8", JSON.stringify(list));
         }
 
         async function loadDiaries() {
             let remoteData = [];
             try {
-                const controller = new AbortController();
-                const timeoutId = setTimeout(() => controller.abort(), 3000); // 3초 내 응답 없으면 안전 타임아웃
-                
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/journal_entries?select=*&order=id.desc&_t=${Date.now()}`, {
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
-                    signal: controller.signal
+                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
                 });
-                clearTimeout(timeoutId);
                 if(res.ok) {
                     remoteData = await res.json();
                 }
-            } catch(e) {
-                // 네트워크 지연이나 에러 발생 시 로컬 저장소 데이터로 즉시 대체하여 먹통 방지
-            }
+            } catch(e) {}
 
             const localData = getLocalDiaries();
             const combinedMap = new Map();
@@ -332,15 +319,6 @@
                 } else {
                     alert("알림 권한이 거부되었습니다.");
                 }
-            });
-        }
-
-        function copyEntireCode() {
-            const htmlContent = document.documentElement.outerHTML;
-            navigator.clipboard.writeText(htmlContent).then(() => {
-                alert("📋 코드가 클립보드에 복사되었습니다! GitHub에 바로 붙여넣기 하세요.");
-            }).catch(err => {
-                alert("복사 실패: 직접 전체 선택 후 복사해 주세요.");
             });
         }
     </script>
