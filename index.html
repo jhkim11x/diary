@@ -68,24 +68,12 @@
         <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <div class="flex justify-between items-center">
                 <label class="text-sm font-bold text-slate-500">✍️ 오늘 일기쓰기</label>
-                <span class="text-xs text-slate-400">* 사진 1장 첨부 가능</span>
             </div>
             <textarea id="diaryContent" rows="3" class="w-full p-4 text-base font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 resize-none" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..."></textarea>
             
-            <div id="imagePreviewContainer" class="hidden relative">
-                <img id="imagePreview" class="w-full h-44 object-cover rounded-xl border border-slate-100">
-                <button onclick="removeImage()" class="absolute top-2 right-2 bg-black/60 text-white rounded-full w-7 h-7 text-sm flex items-center justify-center">✕</button>
-            </div>
-
-            <div class="flex items-center space-x-3 pt-1">
-                <label class="flex-1 py-3.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 text-sm font-bold rounded-xl cursor-pointer text-center transition">
-                    📸 사진 첨부
-                    <input type="file" id="imageInput" accept="image/*" class="hidden" onchange="handleImageUpload(event)">
-                </label>
-                <button onclick="saveDiary()" class="flex-1 py-3.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md shadow-indigo-100 transition">
-                    📝 등록하기
-                </button>
-            </div>
+            <button onclick="saveDiary()" class="w-full py-3.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md shadow-indigo-100 transition">
+                📝 등록하기
+            </button>
         </section>
 
         <!-- Diary List -->
@@ -109,7 +97,6 @@
         const SUPABASE_KEY = "sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo";
         
         let currentAuthor = localStorage.getItem("family_journal_author") || "아빠";
-        let uploadedImageBase64 = null;
         let editingId = null;
 
         window.addEventListener("DOMContentLoaded", () => {
@@ -146,24 +133,6 @@
             }
         }
 
-        function handleImageUpload(event) {
-            const file = event.target.files[0];
-            if(!file) return;
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                uploadedImageBase64 = e.target.result;
-                document.getElementById('imagePreview').src = uploadedImageBase64;
-                document.getElementById('imagePreviewContainer').classList.remove('hidden');
-            }
-            reader.readAsDataURL(file);
-        }
-
-        function removeImage() {
-            uploadedImageBase64 = null;
-            document.getElementById('imageInput').value = "";
-            document.getElementById('imagePreviewContainer').classList.add('hidden');
-        }
-
         async function loadDiaries() {
             try {
                 const res = await fetch(`${SUPABASE_URL}/rest/v1/journal_entries?select=*&order=id.desc`, {
@@ -190,15 +159,12 @@
                 let authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
                 let contentText = typeof item.content === 'string' ? item.content : '';
                 
-                // 강제 보정: "코다리덕장" 일기는 무조건 엄마로 고정
+                // 코다리덕장 글은 무조건 엄마로 고정
                 if(contentText.includes("코다리덕장")) {
                     authorName = "엄마";
                 }
 
-                const moodText = typeof item.mood === 'string' ? item.mood : '';
                 const dateText = typeof item.date === 'string' ? item.date : '';
-                const photoUrl = typeof item.photo === 'string' ? item.photo : '';
-
                 const authorEmoji = authorName === '아빠' ? '👨' : authorName === '엄마' ? '👩' : '👧';
                 const isOwner = authorName === currentAuthor;
 
@@ -208,18 +174,16 @@
                             <div class="flex items-center space-x-2">
                                 <span class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-sm">${authorEmoji}</span>
                                 <span class="font-extrabold text-sm text-slate-800">${authorName}</span>
-                                <span class="text-xs bg-slate-100 px-2.5 py-1 rounded-full font-medium text-slate-600">${moodText}</span>
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-xs text-slate-400 font-medium">${dateText}</span>
                                 ${isOwner ? `
-                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${moodText}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-sm p-1">✏️</button>
+                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-sm p-1">✏️</button>
                                     <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-sm p-1">✕</button>
                                 ` : ''}
                             </div>
                         </div>
                         <p class="text-sm text-slate-800 whitespace-pre-line leading-relaxed font-medium">${contentText}</p>
-                        ${photoUrl ? `<img src="${photoUrl}" class="w-full h-48 object-cover rounded-xl mt-2 border border-slate-50">` : ''}
                     </div>
                 `;
             }).join('');
@@ -231,17 +195,18 @@
             const now = new Date();
             const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-            if(!content && !uploadedImageBase64) {
-                alert("일기 내용이나 사진을 입력해주세요!");
+            if(!content) {
+                alert("일기 내용을 입력해주세요!");
                 return;
             }
 
             const targetAuthor = editingId ? (window.editingAuthor || currentAuthor) : currentAuthor;
+            const fullContent = `[${mood}] ${content}`;
 
-            // Supabase 테이블 구조 충돌 방지를 위해 기본 컬럼(author, content, date)만 전송
+            // 에러를 원천 차단하기 위해 Supabase 기본 필수 컬럼(author, content, date)만 전송
             const payload = {
                 author: targetAuthor,
-                content: `[${mood}] ${content}`,
+                content: fullContent,
                 date: dateStr
             };
 
@@ -268,7 +233,6 @@
 
                 if(res.ok || res.status === 201 || res.status === 204) {
                     document.getElementById('diaryContent').value = "";
-                    removeImage();
                     editingId = null;
                     window.editingAuthor = null;
                     await loadDiaries();
@@ -280,10 +244,20 @@
             }
         }
 
-        function editDiary(id, encodedContent, mood, author) {
+        function editDiary(id, encodedContent, author) {
             editingId = id;
             window.editingAuthor = author;
-            document.getElementById('diaryContent').value = decodeURIComponent(encodedContent);
+            let rawContent = decodeURIComponent(encodedContent);
+            // 기분 꼬리표가 있다면 분리해서 textarea에 넣기
+            if(rawContent.startsWith("[")) {
+                let closingIdx = rawContent.indexOf("]");
+                if(closingIdx !== -1) {
+                    let moodPart = rawContent.substring(1, closingIdx);
+                    document.getElementById('moodSelect').value = moodPart;
+                    rawContent = rawContent.substring(closingIdx + 1).trim();
+                }
+            }
+            document.getElementById('diaryContent').value = rawContent;
             window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
