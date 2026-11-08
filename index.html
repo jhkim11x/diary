@@ -90,6 +90,13 @@
                 </div>
             </div>
         </section>
+
+        <!-- Bottom Quick Copy Button -->
+        <div class="pt-2">
+            <button onclick="copyEntireCode()" class="w-full py-3.5 px-3 bg-slate-800 hover:bg-slate-900 text-white text-base font-bold rounded-xl shadow transition flex items-center justify-center space-x-2">
+                <span>📋 이 코드 전체 복사하기</span>
+            </button>
+        </div>
     </div>
 
     <script>
@@ -103,7 +110,7 @@
             initDate();
             initAuthorUI();
             loadDiaries();
-            setInterval(loadDiaries, 3000); // 3초마다 실시간 동기화
+            setInterval(loadDiaries, 3000);
         });
 
         function initDate() {
@@ -135,14 +142,14 @@
 
         function getLocalDiaries() {
             try {
-                return JSON.parse(localStorage.getItem("local_family_diaries_v5") || "[]");
+                return JSON.parse(localStorage.getItem("local_family_diaries_v6") || "[]");
             } catch(e) {
                 return [];
             }
         }
 
         function saveLocalDiaries(list) {
-            localStorage.setItem("local_family_diaries_v5", JSON.stringify(list));
+            localStorage.setItem("local_family_diaries_v6", JSON.stringify(list));
         }
 
         async function loadDiaries() {
@@ -159,11 +166,10 @@
             const localData = getLocalDiaries();
             const combinedMap = new Map();
             
-            // 기본 영구 데이터 보장 (엄마의 코다리덕장 일기 원본 복원)
             const defaultMotherEntry = {
                 id: 99999999,
                 author: "엄마",
-                content: "코다리덕장, 100일의 거짓말",
+                content: "[행복 ☺️] 코다리덕장, 100일의 거짓말",
                 date: "2026.11.08(일) 21:18"
             };
             combinedMap.set(String(defaultMotherEntry.id), defaultMotherEntry);
@@ -191,7 +197,6 @@
                     authorName = "엄마";
                 }
 
-                // 기분 텍스트와 이모지 분리 처리 ([화남 😡] 형태에서 이모지만 추출)
                 let moodEmoji = "";
                 let cleanContent = rawContent;
                 if(cleanContent.startsWith("[")) {
@@ -216,7 +221,7 @@
                             <div class="flex items-center space-x-2.5">
                                 <span class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-base">${authorEmoji}</span>
                                 <span class="font-extrabold text-base text-slate-900">${authorName}</span>
-                                ${moodEmoji ? `<span class="text-xl" title="기분/활동">${moodEmoji}</span>` : ''}
+                                ${moodEmoji ? `<span class="text-xl">${moodEmoji}</span>` : ''}
                             </div>
                             <div class="flex items-center space-x-2">
                                 <span class="text-sm text-slate-400 font-semibold">${dateText}</span>
@@ -262,7 +267,6 @@
             }
             saveLocalDiaries(localList);
 
-            // Supabase 서버 전송 (실시간 공유)
             try {
                 let url = `${SUPABASE_URL}/rest/v1/journal_entries`;
                 let method = "POST";
@@ -330,6 +334,15 @@
                 } else {
                     alert("알림 권한이 거부되었습니다.");
                 }
+            });
+        }
+
+        function copyEntireCode() {
+            const htmlContent = document.documentElement.outerHTML;
+            navigator.clipboard.writeText(htmlContent).then(() => {
+                alert("📋 코드가 클립보드에 복사되었습니다! GitHub에 바로 붙여넣기 하세요.");
+            }).catch(err => {
+                alert("복사 실패: 직접 전체 선택 후 복사해 주세요.");
             });
         }
     </script>
