@@ -1,0 +1,742 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>서둥이네 한줄 일기장</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Google Fonts (Noto Sans KR) -->
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <script>
+        // 전역 상태 초기화 및 폴백 안전장치
+        window.isCloudMode = false;
+        window.fallbackToLocal = function() {
+            window.isCloudMode = false;
+            if (typeof updateSyncBadge === 'function') updateSyncBadge(false);
+            if (typeof loadEntriesFromLocal === 'function') loadEntriesFromLocal();
+            if (typeof renderEntries === 'function') renderEntries();
+        };
+    </script>
+
+    <!-- Firebase SDK (동기화) -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'family-journal-default';
+        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+
+        if (firebaseConfig) {
+            try {
+                const app = initializeApp(firebaseConfig);
+                window.auth = getAuth(app);
+                window.db = getFirestore(app);
+                window.cloudPublicCollection = collection(window.db, 'artifacts', appId, 'public', 'data', 'journal_entries');
+                window.addDoc = addDoc;
+                window.deleteDoc = deleteDoc;
+                window.doc = doc;
+
+                const initAuth = async () => {
+                    try {
+                        if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                            await signInWithCustomToken(window.auth, __initial_auth_token);
+                        } else {
+                            await signInAnonymously(window.auth);
+                        }
+                        
+                        // 실시간 바인딩 시작
+                        onSnapshot(window.cloudPublicCollection, (snapshot) => {
+                            window.journalEntries = snapshot.docs.map(doc => ({
+                                id: doc.id,
+                                ...doc.data()
+                            }));
+                            window.isCloudMode = true;
+                            if (typeof updateSyncBadge === 'function') updateSyncBadge(true);
+                            if (typeof renderEntries === 'function') renderEntries();
+                        }, (err) => {
+                            console.warn("Cloud Snapshot Fail, switching to Local Mode:", err);
+                            window.fallbackToLocal();
+                        });
+                    } catch (e) {
+                        console.warn("Auth process failed:", e);
+                        window.fallbackToLocal();
+                    }
+                };
+                initAuth();
+            } catch (err) {
+                console.warn("Firebase Init Error:", err);
+                window.fallbackToLocal();
+            }
+        } else {
+            window.fallbackToLocal();
+        }
+    </script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+        }
+        /* 입력창 및 선택창 기본 폰트 크기 강제 확대 (모바일 가독성) */
+        input, textarea, select, button {
+            font-size: 1rem !important;
+        }
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 8px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 8px;
+        }
+    </style>
+</head>
+<body class="bg-slate-100 min-h-screen text-slate-800 flex flex-col items-center p-2 sm:p-4">
+
+    <!-- 토스트 메시지 모달 -->
+    <div id="toast" class="fixed top-3 right-3 left-3 sm:left-auto z-50 transform translate-y-[-100px] opacity-0 transition-all duration-300 ease-in-out bg-slate-900 text-white px-5 py-3.5 rounded-2xl shadow-2xl flex items-center justify-center space-x-3 border border-slate-700">
+        <i id="toast-icon" class="fas fa-info-circle text-amber-400 text-xl"></i>
+        <span id="toast-msg" class="text-base font-bold">알림 메시지</span>
+    </div>
+
+    <div class="w-full max-w-3xl space-y-3.5">
+        
+        <!-- Header -->
+        <header class="bg-white rounded-2xl sm:rounded-3xl p-4 shadow-sm border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div class="flex items-center space-x-3 w-full sm:w-auto">
+                <div class="w-12 h-12 sm:w-14 sm:h-14 bg-indigo-600 rounded-2xl flex items-center justify-center text-white text-2xl sm:text-3xl shadow-lg shadow-indigo-200 shrink-0">
+                    <i class="fas fa-book-open"></i>
+                </div>
+                <div class="min-w-0 flex-1">
+                    <div class="flex items-center space-x-2">
+                        <h1 class="text-2xl sm:text-3xl font-extrabold text-slate-900 truncate">서둥이네 한줄 일기장</h1>
+                        <span id="sync-badge" class="px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shrink-0">
+                            <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 실시간
+                        </span>
+                    </div>
+                    <p class="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">우리 가족 하루 기록하기</p>
+                </div>
+            </div>
+
+            <!-- 데이터 관리 (다운로드/업로드) -->
+            <div class="flex items-center space-x-2 w-full sm:w-auto justify-end pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-100">
+                <button onclick="downloadBackup()" class="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-xl transition flex items-center justify-center space-x-1.5 border border-slate-300">
+                    <i class="fas fa-download text-indigo-600"></i>
+                    <span>백업 받기</span>
+                </button>
+                <label for="upload-file" class="flex-1 sm:flex-none px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-xl transition cursor-pointer flex items-center justify-center space-x-1.5 border border-slate-300">
+                    <i class="fas fa-upload text-indigo-600"></i>
+                    <span>불러오기</span>
+                </label>
+                <input type="file" id="upload-file" accept=".json" class="hidden" onchange="uploadBackup(event)">
+            </div>
+        </header>
+
+        <!-- 일기 작성폼 -->
+        <main class="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-6 shadow-sm border border-slate-200/80 space-y-4">
+            
+            <!-- 작성자 & 날짜/날씨 세션 -->
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                
+                <!-- 작성자 선택 -->
+                <div>
+                    <label class="block text-xs sm:text-sm font-extrabold text-slate-600 mb-1.5 uppercase tracking-wider">👤 작성자 선택</label>
+                    <div id="author-selector" class="grid grid-cols-3 gap-2">
+                        <!-- JS Dynamic insertion -->
+                    </div>
+                </div>
+
+                <!-- 날짜, 시간, 날씨 (자동) -->
+                <div>
+                    <label class="block text-xs sm:text-sm font-extrabold text-slate-600 mb-1.5 uppercase tracking-wider">📅 작성 일시 및 날씨</label>
+                    <div class="flex items-center justify-between bg-slate-50 p-3 rounded-xl border border-slate-300 text-sm sm:text-base">
+                        <div class="flex items-center space-x-2 truncate">
+                            <i class="far fa-calendar-alt text-indigo-600 text-base shrink-0"></i>
+                            <span id="current-date-time" class="font-bold text-slate-800 text-sm sm:text-base truncate">로딩 중...</span>
+                        </div>
+                        <div class="flex items-center space-x-1.5 bg-white px-2.5 py-1 rounded-lg shadow-xs border border-slate-200 shrink-0 ml-1">
+                            <span id="weather-icon" class="text-amber-500 text-sm"><i class="fas fa-spinner fa-spin"></i></span>
+                            <span id="weather-text" class="text-xs sm:text-sm font-bold text-slate-700">감지 중</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 아이콘 선택 (기분 & 할일 - 콤보박스 형태) -->
+            <div>
+                <label class="block text-xs sm:text-sm font-extrabold text-slate-600 mb-1.5 uppercase tracking-wider">😊 기분 & 활동 선택</label>
+                <div class="space-y-2">
+                    <div class="relative">
+                        <select id="tag-combo-select" onchange="handleTagSelect(event)" class="w-full p-3 pr-10 rounded-xl border-2 border-slate-300 bg-slate-50 text-slate-800 text-base font-bold focus:outline-none focus:ring-2 focus:ring-indigo-500 appearance-none transition cursor-pointer">
+                            <option value="">+ 누르면 기분/활동을 추가할 수 있어요</option>
+                            <!-- JS Dynamic insertion -->
+                        </select>
+                        <i class="fas fa-chevron-down absolute right-4 top-1/2 transform -translate-y-1/2 text-slate-500 text-base pointer-events-none"></i>
+                    </div>
+
+                    <!-- 선택된 태그 목록 (칩 레이블) -->
+                    <div id="selected-tags-container" class="flex flex-wrap gap-2 min-h-[32px]">
+                        <span class="text-sm text-slate-400 italic font-medium py-1">선택된 태그가 없습니다.</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 일기 내용 입력 및 사진 첨부 -->
+            <div>
+                <div class="flex justify-between items-center mb-1.5">
+                    <label class="block text-xs sm:text-sm font-extrabold text-slate-600 uppercase tracking-wider">📝 일기 쓰기</label>
+                    <span class="text-xs text-indigo-600 font-bold">* 짧은 한 줄도 좋아요!</span>
+                </div>
+                <textarea id="journal-text" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-3.5 sm:p-4 rounded-xl border-2 border-slate-300 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent resize-none text-slate-900 placeholder-slate-400 text-base sm:text-lg font-medium leading-relaxed transition"></textarea>
+                
+                <!-- 사진 첨부 버튼 & 프리뷰 -->
+                <div class="mt-3 flex items-center space-x-3">
+                    <label for="image-upload" class="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 text-sm font-bold rounded-xl transition cursor-pointer flex items-center space-x-2 border border-slate-300">
+                        <i class="fas fa-camera text-indigo-600 text-base"></i>
+                        <span>오늘의 사진 첨부 (1장)</span>
+                    </label>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden" onchange="handleImageSelect(event)">
+                    
+                    <div id="image-preview-container" class="hidden relative inline-block">
+                        <img id="image-preview" src="" alt="미리보기" class="w-12 h-12 sm:w-14 sm:h-14 object-cover rounded-xl border-2 border-indigo-400">
+                        <button onclick="removeSelectedImage()" class="absolute -top-2 -right-2 bg-rose-600 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-md font-bold">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 등록 버튼 -->
+            <button onclick="saveEntry()" class="w-full py-3.5 sm:py-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] text-white text-base sm:text-lg font-extrabold rounded-xl shadow-md shadow-indigo-200 transition flex items-center justify-center space-x-2">
+                <i class="fas fa-pen text-lg"></i>
+                <span>일기 등록하기</span>
+            </button>
+        </main>
+
+        <!-- 일기 목록 및 검색 -->
+        <section class="space-y-3">
+            
+            <!-- 검색바 및 카운터 -->
+            <div class="flex flex-col sm:flex-row justify-between items-center gap-2.5">
+                <div class="relative w-full sm:w-80">
+                    <i class="fas fa-search absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400 text-base"></i>
+                    <input type="text" id="search-input" oninput="renderEntries()" placeholder="작성자, 내용, 태그 검색..." class="w-full pl-11 pr-4 py-2.5 bg-white rounded-xl border border-slate-300 text-sm sm:text-base font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500 transition">
+                </div>
+                <div class="text-xs sm:text-sm text-slate-600 font-bold self-end sm:self-center">
+                    총 <span id="entry-count" class="font-extrabold text-indigo-600 text-base sm:text-lg">0</span>개의 일기
+                </div>
+            </div>
+
+            <!-- 일기 타임라인 카드 리스트 -->
+            <div id="journal-list" class="space-y-3">
+                <!-- JS Dynamic insertion -->
+            </div>
+        </section>
+
+    </div>
+
+    <script>
+        // 가족 멤버 데이터 (아빠, 엄마, 딸)
+        const FAMILY_MEMBERS = [
+            { id: 'dad', name: '아빠', icon: 'fa-user-tie', color: 'bg-blue-100 text-blue-800 border-blue-300' },
+            { id: 'mom', name: '엄마', icon: 'fa-user-nurse', color: 'bg-rose-100 text-rose-800 border-rose-300' },
+            { id: 'daughter', name: '딸', icon: 'fa-child-dress', color: 'bg-purple-100 text-purple-800 border-purple-300' }
+        ];
+
+        // 태그 아이콘 목록
+        const TAG_OPTIONS = [
+            { id: 'happy', label: '😊 행복해요', icon: 'fa-smile', color: 'text-amber-500' },
+            { id: 'love', label: '💖 최고예요', icon: 'fa-heart', color: 'text-rose-500' },
+            { id: 'laugh', label: '😆 신나요', icon: 'fa-laugh-beam', color: 'text-yellow-500' },
+            { id: 'tired', label: '😴 피곤해요', icon: 'fa-tired', color: 'text-indigo-400' },
+            { id: 'sad', label: '😢 속상해요', icon: 'fa-sad-tear', color: 'text-blue-400' },
+            { id: 'work', label: '💼 열일했음', icon: 'fa-briefcase', color: 'text-slate-600' },
+            { id: 'study', label: '📖 공부완료', icon: 'fa-book-reader', color: 'text-emerald-600' },
+            { id: 'exercise', label: '🏋️‍♂️ 운동완료', icon: 'fa-dumbbell', color: 'text-orange-500' },
+            { id: 'yummy', label: '🍴 맛있는음식', icon: 'fa-utensils', color: 'text-red-500' },
+            { id: 'trip', label: '🚗 가족나들이', icon: 'fa-car', color: 'text-teal-500' }
+        ];
+
+        // 상태 변수
+        window.journalEntries = window.journalEntries || [];
+        let selectedAuthor = FAMILY_MEMBERS[0];
+        let selectedTags = [];
+        let selectedImageData = null;
+        let currentWeather = { text: '맑음 22°C', icon: 'fa-sun text-amber-500' };
+
+        // 날짜 및 시간 업데이트
+        function updateDateTime() {
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const date = String(now.getDate()).padStart(2, '0');
+            const days = ['일', '월', '화', '수', '목', '금', '토'];
+            const dayName = days[now.getDay()];
+            const hours = String(now.getHours()).padStart(2, '0');
+            const minutes = String(now.getMinutes()).padStart(2, '0');
+
+            const dateStr = `${year}.${month}.${date}(${dayName}) ${hours}:${minutes}`;
+            const elem = document.getElementById('current-date-time');
+            if (elem) elem.innerText = dateStr;
+        }
+
+        // 날씨 감지 (Open-Meteo API / fallback)
+        function fetchWeather() {
+            const weatherIconElem = document.getElementById('weather-icon');
+            const weatherTextElem = document.getElementById('weather-text');
+
+            if ("geolocation" in navigator) {
+                navigator.geolocation.getCurrentPosition(
+                    async (position) => {
+                        try {
+                            const lat = position.coords.latitude;
+                            const lon = position.coords.longitude;
+                            const res = await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`);
+                            const data = await res.json();
+                            const weatherCode = data.current_weather.weathercode;
+                            const temp = Math.round(data.current_weather.temperature);
+                            
+                            const weatherInfo = parseWeatherCode(weatherCode, temp);
+                            currentWeather = weatherInfo;
+                            if (weatherIconElem) weatherIconElem.innerHTML = `<i class="fas ${weatherInfo.icon}"></i>`;
+                            if (weatherTextElem) weatherTextElem.innerText = weatherInfo.text;
+                        } catch (e) {
+                            setDefaultWeather();
+                        }
+                    },
+                    () => setDefaultWeather()
+                );
+            } else {
+                setDefaultWeather();
+            }
+        }
+
+        function parseWeatherCode(code, temp) {
+            if (code === 0) return { text: `맑음 ${temp}°C`, icon: 'fa-sun text-amber-500' };
+            if (code >= 1 && code <= 3) return { text: `구름조금 ${temp}°C`, icon: 'fa-cloud-sun text-amber-400' };
+            if (code >= 45 && code <= 48) return { text: `안개 ${temp}°C`, icon: 'fa-smog text-slate-400' };
+            if (code >= 51 && code <= 67) return { text: `비 ${temp}°C`, icon: 'fa-cloud-rain text-blue-500' };
+            if (code >= 71 && code <= 77) return { text: `눈 ${temp}°C`, icon: 'fa-snowflake text-sky-400' };
+            if (code >= 80 && code <= 82) return { text: `소나기 ${temp}°C`, icon: 'fa-cloud-showers-heavy text-indigo-500' };
+            if (code >= 95) return { text: `뇌우 ${temp}°C`, icon: 'fa-bolt text-yellow-500' };
+            return { text: `맑음 ${temp}°C`, icon: 'fa-sun text-amber-500' };
+        }
+
+        function setDefaultWeather() {
+            currentWeather = { text: '맑음 22°C', icon: 'fa-sun text-amber-500' };
+            const weatherIconElem = document.getElementById('weather-icon');
+            const weatherTextElem = document.getElementById('weather-text');
+            if (weatherIconElem) weatherIconElem.innerHTML = `<i class="fas ${currentWeather.icon}"></i>`;
+            if (weatherTextElem) weatherTextElem.innerText = currentWeather.text;
+        }
+
+        // 이미지 선택 처리
+        function handleImageSelect(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            if (!file.type.startsWith('image/')) {
+                showToast('이미지 파일만 선택해 주세요.', false);
+                return;
+            }
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                selectedImageData = e.target.result;
+                const previewImg = document.getElementById('image-preview');
+                const previewContainer = document.getElementById('image-preview-container');
+                if (previewImg && previewContainer) {
+                    previewImg.src = selectedImageData;
+                    previewContainer.classList.remove('hidden');
+                }
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeSelectedImage() {
+            selectedImageData = null;
+            const previewContainer = document.getElementById('image-preview-container');
+            const fileInput = document.getElementById('image-upload');
+            if (previewContainer) previewContainer.classList.add('hidden');
+            if (fileInput) fileInput.value = '';
+        }
+
+        // 로컬스토리지 불러오기 및 뱃지 업데이트
+        function loadEntriesFromLocal() {
+            try {
+                const saved = localStorage.getItem('family_journal_db');
+                if (saved) {
+                    window.journalEntries = JSON.parse(saved);
+                }
+            } catch (e) {
+                console.warn('Local storage error:', e);
+            }
+        }
+
+        function updateSyncBadge(isCloud) {
+            const badge = document.getElementById('sync-badge');
+            if (!badge) return;
+            if (isCloud) {
+                badge.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-emerald-100 text-emerald-800 border border-emerald-300 flex items-center gap-1 shrink-0";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span> 실시간`;
+            } else {
+                badge.className = "px-2.5 py-1 text-xs font-bold rounded-full bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1 shrink-0";
+                badge.innerHTML = `<span class="w-2 h-2 rounded-full bg-slate-400"></span> 내 기기 저장`;
+            }
+        }
+
+        // 일기 저장
+        async function saveEntry() {
+            const textElem = document.getElementById('journal-text');
+            const content = textElem ? textElem.value.trim() : '';
+
+            if (!content) {
+                showToast('일기 내용을 한 줄 이상 입력해 주세요!', false);
+                return;
+            }
+
+            const dateTimeElem = document.getElementById('current-date-time');
+            const dateTimeStr = dateTimeElem ? dateTimeElem.innerText : '';
+
+            const entryData = {
+                author: selectedAuthor,
+                dateTimeStr: dateTimeStr,
+                timestamp: Date.now(),
+                weather: currentWeather,
+                tags: [...selectedTags],
+                content: content,
+                imageUrl: selectedImageData || null
+            };
+
+            if (window.isCloudMode && window.cloudPublicCollection) {
+                try {
+                    await window.addDoc(window.cloudPublicCollection, entryData);
+                    showToast('클라우드에 일기가 저장되었습니다!');
+                } catch (e) {
+                    console.error('Cloud Save Error:', e);
+                    saveToLocal(entryData);
+                }
+            } else {
+                saveToLocal(entryData);
+            }
+
+            // 폼 초기화
+            if (textElem) textElem.value = '';
+            selectedTags = [];
+            removeSelectedImage();
+            initTagComboSelect();
+        }
+
+        function saveToLocal(entryData) {
+            entryData.id = 'local_' + Date.now();
+            window.journalEntries.unshift(entryData);
+            localStorage.setItem('family_journal_db', JSON.stringify(window.journalEntries));
+            renderEntries();
+            showToast('일기가 등록되었습니다!');
+        }
+
+        // 일기 삭제
+        async function deleteEntry(id) {
+            if (!id) return;
+            
+            if (window.isCloudMode && window.db && !id.startsWith('local_')) {
+                try {
+                    await window.deleteDoc(window.doc(window.db, 'artifacts', typeof __app_id !== 'undefined' ? __app_id : 'family-journal-default', 'public', 'data', 'journal_entries', id));
+                    showToast('일기가 삭제되었습니다.');
+                } catch (e) {
+                    console.error('Cloud Delete Error:', e);
+                    deleteFromLocal(id);
+                }
+            } else {
+                deleteFromLocal(id);
+            }
+        }
+
+        function deleteFromLocal(id) {
+            window.journalEntries = window.journalEntries.filter(item => item.id !== id);
+            localStorage.setItem('family_journal_db', JSON.stringify(window.journalEntries));
+            renderEntries();
+            showToast('일기가 삭제되었습니다.');
+        }
+
+        // 토스트 메시지
+        function showToast(message, isSuccess = true) {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toast-msg');
+            const toastIcon = document.getElementById('toast-icon');
+            if (!toast || !toastMsg || !toastIcon) return;
+
+            toastMsg.innerText = message;
+            if (isSuccess) {
+                toastIcon.className = "fas fa-check-circle text-emerald-400 text-xl";
+            } else {
+                toastIcon.className = "fas fa-exclamation-circle text-amber-400 text-xl";
+            }
+
+            toast.classList.remove('translate-y-[-100px]', 'opacity-0');
+            toast.classList.add('translate-y-0', 'opacity-100');
+
+            setTimeout(() => {
+                toast.classList.remove('translate-y-0', 'opacity-100');
+                toast.classList.add('translate-y-[-100px]', 'opacity-0');
+            }, 2500);
+        }
+
+        // 초기화
+        window.onload = function() {
+            initAuthorSelector();
+            initTagComboSelect();
+            updateDateTime();
+            setInterval(updateDateTime, 10000); // 10초마다 시계 업데이트
+            fetchWeather();
+            
+            if (!window.isCloudMode) {
+                loadEntriesFromLocal();
+                renderEntries();
+            }
+        };
+
+        // 작성자 버튼 생성
+        function initAuthorSelector() {
+            const container = document.getElementById('author-selector');
+            if (!container) return;
+
+            container.innerHTML = FAMILY_MEMBERS.map(member => {
+                const isSelected = member.id === selectedAuthor.id;
+                return `
+                    <button type="button" onclick="selectAuthor('${member.id}')" 
+                        class="p-2.5 sm:p-3 rounded-xl font-bold flex items-center justify-center space-x-1.5 sm:space-x-2 transition border-2 text-base sm:text-lg ${
+                            isSelected 
+                                ? `${member.color} border-indigo-600 shadow-sm ring-2 ring-indigo-500/20` 
+                                : 'bg-slate-50 text-slate-600 border-slate-200 hover:bg-slate-100'
+                        }">
+                        <i class="fas ${member.icon}"></i>
+                        <span>${member.name}</span>
+                    </button>
+                `;
+            }).join('');
+        }
+
+        function selectAuthor(authorId) {
+            const found = FAMILY_MEMBERS.find(m => m.id === authorId);
+            if (found) {
+                selectedAuthor = found;
+                initAuthorSelector();
+            }
+        }
+
+        // 태그 콤보박스 초기화 및 선택 처리
+        function initTagComboSelect() {
+            const selectElem = document.getElementById('tag-combo-select');
+            if (!selectElem) return;
+
+            selectElem.innerHTML = `
+                <option value="">+ 누르면 기분/활동을 추가할 수 있어요</option>
+                ${TAG_OPTIONS.map(tag => `<option value="${tag.id}">${tag.label}</option>`).join('')}
+            `;
+
+            renderSelectedTags();
+        }
+
+        function handleTagSelect(event) {
+            const tagId = event.target.value;
+            if (!tagId) return;
+
+            const tagObj = TAG_OPTIONS.find(t => t.id === tagId);
+            if (tagObj && !selectedTags.some(t => t.id === tagId)) {
+                selectedTags.push(tagObj);
+                renderSelectedTags();
+            }
+
+            event.target.value = '';
+        }
+
+        function removeTag(tagId) {
+            selectedTags = selectedTags.filter(t => t.id !== tagId);
+            renderSelectedTags();
+        }
+
+        function renderSelectedTags() {
+            const container = document.getElementById('selected-tags-container');
+            if (!container) return;
+
+            if (selectedTags.length === 0) {
+                container.innerHTML = `<span class="text-sm text-slate-400 italic font-medium py-1">선택된 태그가 없습니다.</span>`;
+                return;
+            }
+
+            container.innerHTML = selectedTags.map(tag => `
+                <span class="inline-flex items-center space-x-1 bg-indigo-50 text-indigo-700 border border-indigo-200 px-3 py-1.5 rounded-lg text-sm sm:text-base font-bold shadow-xs">
+                    <i class="fas ${tag.icon} ${tag.color}"></i>
+                    <span>${tag.label}</span>
+                    <button type="button" onclick="removeTag('${tag.id}')" class="ml-1 text-indigo-400 hover:text-indigo-700 focus:outline-none font-bold">
+                        <i class="fas fa-times text-xs"></i>
+                    </button>
+                </span>
+            `).join('');
+        }
+
+        // 일기 목록 렌더링
+        function renderEntries() {
+            const container = document.getElementById('journal-list');
+            const countElem = document.getElementById('entry-count');
+            const searchInput = document.getElementById('search-input');
+            const query = searchInput ? searchInput.value.trim().toLowerCase() : '';
+
+            if (!container) return;
+
+            // 최신순 정렬
+            let sorted = [...window.journalEntries].sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            // 검색 필터링
+            if (query) {
+                sorted = sorted.filter(item => {
+                    const contentMatch = item.content && item.content.toLowerCase().includes(query);
+                    const authorMatch = item.author && item.author.name && item.author.name.toLowerCase().includes(query);
+                    const tagMatch = item.tags && item.tags.some(t => t.label && t.label.toLowerCase().includes(query));
+                    return contentMatch || authorMatch || tagMatch;
+                });
+            }
+
+            if (countElem) countElem.innerText = sorted.length;
+
+            if (sorted.length === 0) {
+                container.innerHTML = `
+                    <div class="bg-white rounded-2xl p-8 text-center text-slate-400 border border-slate-200">
+                        <i class="fas fa-journal-whills text-4xl text-slate-300 mb-2"></i>
+                        <p class="text-base font-bold">등록되거나 검색된 일기가 없습니다.</p>
+                        <p class="text-xs text-slate-400 mt-1">첫 일기를 작성해 보세요!</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = sorted.map(entry => {
+                const authorColor = entry.author?.color || 'bg-slate-100 text-slate-700 border-slate-300';
+                const authorIcon = entry.author?.icon || 'fa-user';
+                const authorName = entry.author?.name || '가족';
+
+                const tagsHtml = (entry.tags || []).map(t => `
+                    <span class="inline-flex items-center space-x-1 px-2.5 py-1 bg-slate-100 text-slate-700 rounded-md text-xs sm:text-sm font-bold border border-slate-200">
+                        <i class="fas ${t.icon} ${t.color}"></i>
+                        <span>${t.label}</span>
+                    </span>
+                `).join('');
+
+                const imageHtml = entry.imageUrl ? `
+                    <div class="mt-3">
+                        <img src="${entry.imageUrl}" alt="일기 사진" class="max-h-60 rounded-xl border border-slate-200 object-cover w-full">
+                    </div>
+                ` : '';
+
+                return `
+                    <article class="bg-white rounded-2xl sm:rounded-3xl p-4 sm:p-5 shadow-sm border border-slate-200/80 space-y-3 transition hover:shadow-md">
+                        <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                            <div class="flex items-center space-x-2.5">
+                                <span class="px-3 py-1 rounded-xl font-bold text-sm sm:text-base border ${authorColor} flex items-center space-x-1.5">
+                                    <i class="fas ${authorIcon}"></i>
+                                    <span>${authorName}</span>
+                                </span>
+                                <div class="text-xs sm:text-sm text-slate-500 font-medium">
+                                    <i class="far fa-clock text-slate-400 mr-1"></i>${entry.dateTimeStr || ''}
+                                </div>
+                            </div>
+                            <div class="flex items-center space-x-2">
+                                ${entry.weather ? `
+                                    <span class="text-xs sm:text-sm font-bold text-slate-600 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200 flex items-center space-x-1">
+                                        <i class="fas ${entry.weather.icon}"></i>
+                                        <span>${entry.weather.text}</span>
+                                    </span>
+                                ` : ''}
+                                <button onclick="deleteEntry('${entry.id}')" class="text-slate-400 hover:text-rose-600 p-1.5 transition rounded-lg hover:bg-rose-50" title="일기 삭제">
+                                    <i class="fas fa-trash-alt text-base"></i>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- 일기 내용 -->
+                        <p class="text-slate-800 text-base sm:text-lg font-medium leading-relaxed whitespace-pre-wrap">${escapeHtml(entry.content || '')}</p>
+
+                        <!-- 사진 첨부 내용 -->
+                        ${imageHtml}
+
+                        <!-- 태그 목록 -->
+                        ${entry.tags && entry.tags.length > 0 ? `
+                            <div class="flex flex-wrap gap-1.5 pt-1">
+                                ${tagsHtml}
+                            </div>
+                        ` : ''}
+                    </article>
+                `;
+            }).join('');
+        }
+
+        function escapeHtml(str) {
+            return str
+                .replace(/&/g, "&amp;")
+                .replace(/</g, "&lt;")
+                .replace(/>/g, "&gt;")
+                .replace(/"/g, "&quot;")
+                .replace(/'/g, "&#039;");
+        }
+
+        // 백업 다운로드
+        function downloadBackup() {
+            if (!window.journalEntries || window.journalEntries.length === 0) {
+                showToast('백업할 일기 데이터가 없습니다.', false);
+                return;
+            }
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(window.journalEntries, null, 2));
+            const downloadAnchor = document.createElement('a');
+            const fileName = `서둥이네_일기장_백업_${new Date().toISOString().slice(0, 10)}.json`;
+            
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", fileName);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+
+            showToast('일기 백업 파일이 저장되었습니다.');
+        }
+
+        // 백업 불러오기
+        function uploadBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = async function(e) {
+                try {
+                    const loadedEntries = JSON.parse(e.target.result);
+                    if (Array.isArray(loadedEntries)) {
+                        if (window.isCloudMode && window.cloudPublicCollection) {
+                            for (const entry of loadedEntries) {
+                                delete entry.id;
+                                await window.addDoc(window.cloudPublicCollection, entry);
+                            }
+                        } else {
+                            window.journalEntries = [...loadedEntries, ...window.journalEntries];
+                            localStorage.setItem('family_journal_db', JSON.stringify(window.journalEntries));
+                            renderEntries();
+                        }
+                        showToast('백업 데이터를 성공적으로 불러왔습니다!');
+                    } else {
+                        showToast('올바른 백업 파일 형식이 아닙니다.', false);
+                    }
+                } catch (err) {
+                    showToast('파일을 읽는 중 오류가 발생했습니다.', false);
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+    </script>
+</body>
+</html>
