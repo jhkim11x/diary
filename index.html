@@ -1,297 +1,442 @@
 <!DOCTYPE html>
 <html lang="ko">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>서둥이네 한줄 일기장</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <style>
-        .active-author { border-color: #4f46e5 !important; background-color: #eef2ff !important; color: #4f46e5 !important; font-weight: 800; }
-        button, a { -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; text-decoration: none !important; }
-        button:hover, button:focus, button:active { text-decoration: none !important; }
-    </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>서둥이네 한줄 일기장</title>
+<!-- Tailwind CSS CDN -->
+<script src="https://cdn.tailwindcss.com"></script>
+<!-- FontAwesome 아이콘 -->
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700;800&display=swap');
+body {
+font-family: 'Noto Sans KR', sans-serif;
+background-color: #f8fafc;
+color: #1e293b;
+-webkit-tap-highlight-color: transparent;
+}
+.active-author {
+border-color: #4f46e5 !important;
+background-color: #eeefff !important;
+color: #4f46e5 !important;
+font-weight: 800;
+}
+/* 새로고침 및 모든 버튼 터치 밑줄 잔상 완전히 방지 */
+button, a, select, textarea, input {
+-webkit-touch-callout: none;
+-webkit-user-select: none;
+user-select: none;
+text-decoration: none !important;
+outline: none !important;
+}
+button:hover, button:focus, button:active, a:hover, a:focus, a:active {
+text-decoration: none !important;
+}
+</style>
 </head>
-<body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
-    <div class="max-w-md mx-auto p-4 space-y-5 text-base font-medium">
-        <!-- Header -->
-        <header class="bg-white p-5 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
-            <div class="flex items-center space-x-3">
-                <div class="bg-indigo-50 p-3 rounded-xl text-indigo-600 text-xl">📖</div>
-                <div>
-                    <h1 class="text-xl font-extrabold text-slate-900">서둥이네 한줄 일기장</h1>
-                    <p class="text-sm text-slate-500 font-medium">우리 가족 하루 기록하기</p>
-                </div>
-            </div>
-            <div class="flex items-center space-x-3">
-                <button onclick="requestNotification()" id="notifBtn" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-lg">🔔</button>
-                <div id="syncStatus" class="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm" title="실시간 공유 연결됨"></div>
-            </div>
-        </header>
-
-        <!-- Author Selection -->
-        <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-            <label class="block text-base font-bold text-slate-600 mb-3">👤 작성자 선택</label>
-            <div class="grid grid-cols-3 gap-2.5">
-                <button onclick="setAuthor('아빠', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👨</span><span>아빠</span></button>
-                <button onclick="setAuthor('엄마', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👩</span><span>엄마</span></button>
-                <button onclick="setAuthor('딸', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👧</span><span>딸</span></button>
-            </div>
-        </section>
-
-        <!-- Date & Weather Info -->
-        <div class="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between text-base font-semibold text-slate-700">
-            <span id="currentDateDisp">📅 날짜 로딩중...</span>
-            <span id="weatherDisp">☀️ 맑음</span>
-        </div>
-
-        <!-- Mood & Activity Selection -->
-        <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-            <label class="block text-base font-bold text-slate-600 mb-3">😊 기분 & 활동 선택</label>
-            <select id="moodSelect" class="w-full p-3.5 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500">
-                <option value="행복 ☺️">행복 ☺️</option>
-                <option value="기쁨 🎉">기쁨 🎉</option>
-                <option value="평온 😌">평온 😌</option>
-                <option value="서운 🥺">서운 🥺</option>
-                <option value="피곤 🥱">피곤 🥱</option>
-                <option value="슬픔 😢">슬픔 😢</option>
-                <option value="화남 😡">화남 😡</option>
-                <option value="산책 🚶‍♂️">산책 🚶‍♂️</option>
-                <option value="운동 🏃‍♂️">운동 🏃‍♂️</option>
-                <option value="독서 📚">독서 📚</option>
-                <option value="요리 🍳">요리 🍳</option>
-                <option value="여행 ✈️">여행 ✈️</option>
-                <option value="쇼핑 🛍️">쇼핑 🛍️</option>
-            </select>
-        </section>
-
-        <!-- Write Entry -->
-        <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
-            <div class="flex justify-between items-center">
-                <label class="text-base font-bold text-slate-600">✍️ 오늘 일기쓰기</label>
-            </div>
-            <textarea id="diaryContent" rows="3" class="w-full p-4 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 resize-none" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..."></textarea>
-            
-            <button onclick="saveDiary()" class="w-full py-4 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-bold rounded-xl shadow-md shadow-indigo-100 transition">
-                📝 등록하기
-            </button>
-        </section>
-
-        <!-- Diary List -->
-        <section class="space-y-3.5">
-            <div class="flex items-center justify-between px-1">
-                <h2 class="text-base font-extrabold text-slate-800">📖 우리 가족 일기 목록</h2>
-                <button onclick="loadDiaries()" class="text-base text-indigo-600 font-bold hover:text-indigo-700 flex items-center space-x-1">
-                    <span>새로고침</span>
-                </button>
-            </div>
-            <div id="diaryList" class="space-y-3.5">
-                <div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-base font-medium border border-slate-100">
-                    일기를 불러오는 중입니다... ⏳
-                </div>
-            </div>
-        </section>
-    </div>
-
-    <script>
-        const SUPABASE_URL = "https://gookdripmzsaxfgfigai.supabase.co";
-        const SUPABASE_KEY = "sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo";
-        
-        let currentAuthor = localStorage.getItem("family_journal_author") || "아빠";
-        let editingId = null;
-
-        window.addEventListener("DOMContentLoaded", () => {
-            initDate();
-            initAuthorUI();
-            loadDiaries();
-            setInterval(loadDiaries, 5000); // 5초마다 자동 새로고침(실시간 동기화)
-        });
-
-        function initDate() {
-            const now = new Date();
-            const days = ['일', '월', '화', '수', '목', '금', '토'];
-            const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}(${days[now.getDay()]}) ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-            document.getElementById('currentDateDisp').innerText = `📅 ${dateStr}`;
-        }
-
-        function initAuthorUI() {
-            document.querySelectorAll('.author-btn').forEach(btn => {
-                if(btn.innerText.includes(currentAuthor)) {
-                    btn.classList.add('active-author');
-                } else {
-                    btn.classList.remove('active-author');
-                }
-            });
-        }
-
-        function setAuthor(author, btn) {
-            currentAuthor = author;
-            localStorage.setItem("family_journal_author", author);
-            document.querySelectorAll('.author-btn').forEach(b => b.classList.remove('active-author'));
-            btn.classList.add('active-author');
-            if (window.cachedDiaries) {
-                renderDiaryList(window.cachedDiaries);
-            }
-        }
-
-        async function loadDiaries() {
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/journal_entries?select=*&order=id.desc`, {
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-                });
-                if(res.ok) {
-                    const data = await res.json();
-                    window.cachedDiaries = data;
-                    renderDiaryList(data);
-                } else {
-                    document.getElementById('diaryList').innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-rose-400 text-base font-medium border border-slate-100">서버에서 데이터를 불러오지 못했습니다.</div>`;
-                }
-            } catch(e) {
-                document.getElementById('diaryList').innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-rose-400 text-base font-medium border border-slate-100">네트워크 연결을 확인해주세요.</div>`;
-            }
-        }
-
-        function renderDiaryList(diaries) {
-            const container = document.getElementById('diaryList');
-            if(!diaries || diaries.length === 0) {
-                container.innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-base font-medium border border-slate-100">아직 등록된 일기가 없습니다.<br>첫 번째 일기를 남겨보세요! ✍️</div>`;
-                return;
-            }
-
-            container.innerHTML = diaries.map(item => {
-                let authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
-                let rawContent = typeof item.content === 'string' ? item.content : '';
-
-                let moodEmoji = "";
-                let cleanContent = rawContent;
-                if(cleanContent.startsWith("[")) {
-                    let closingIdx = cleanContent.indexOf("]");
-                    if(closingIdx !== -1) {
-                        let moodPart = cleanContent.substring(1, closingIdx).trim();
-                        let match = moodPart.match(/[\p{Extended_Pictographic}\u{1f300}-\u{1f5ff}\u{1f900}-\u{1f9ff}\u{1f600}-\u{1f64f}\u{2600}-\u{26ff}]/u);
-                        if(match) {
-                            moodEmoji = match[0];
-                        }
-                        cleanContent = cleanContent.substring(closingIdx + 1).trim();
-                    }
-                }
-
-                const dateText = typeof item.date === 'string' ? item.date : '';
-                const authorEmoji = authorName === '아빠' ? '👨' : authorName === '엄마' ? '👩' : '👧';
-                const isOwner = authorName === currentAuthor;
-
-                return `
-                    <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3">
-                        <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2.5">
-                                <span class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-base">${authorEmoji}</span>
-                                <span class="font-extrabold text-base text-slate-900">${authorName}</span>
-                                ${moodEmoji ? `<span class="text-xl">${moodEmoji}</span>` : ''}
-                            </div>
-                            <div class="flex items-center space-x-2">
-                                <span class="text-sm text-slate-400 font-semibold">${dateText}</span>
-                                ${isOwner ? `
-                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(cleanContent)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-base p-1">✏️</button>
-                                    <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-base p-1">✕</button>
-                                ` : ''}
-                            </div>
-                        </div>
-                        <p class="text-base text-slate-900 whitespace-pre-line leading-relaxed font-bold">${cleanContent}</p>
-                    </div>
-                `;
-            }).join('');
-        }
-
-        async function saveDiary() {
-            const content = document.getElementById('diaryContent').value.trim();
-            const mood = document.getElementById('moodSelect').value;
-            const now = new Date();
-            const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-            if(!content) {
-                alert("일기 내용을 입력해주세요!");
-                return;
-            }
-
-            const targetAuthor = editingId ? (window.editingAuthor || currentAuthor) : currentAuthor;
-            const fullContent = `[${mood}] ${content}`;
-
-            try {
-                let url = `${SUPABASE_URL}/rest/v1/journal_entries`;
-                let method = "POST";
-                let headers = {
-                    "apikey": SUPABASE_KEY,
-                    "Authorization": `Bearer ${SUPABASE_KEY}`,
-                    "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
-                };
-
-                if(editingId) {
-                    url += `?id=eq.${editingId}`;
-                    method = "PATCH";
-                }
-
-                const res = await fetch(url, {
-                    method: method,
-                    headers: headers,
-                    body: JSON.stringify({
-                        author: targetAuthor,
-                        content: fullContent,
-                        date: dateStr
-                    })
-                });
-
-                if(res.ok) {
-                    document.getElementById('diaryContent').value = "";
-                    editingId = null;
-                    window.editingAuthor = null;
-                    await loadDiaries();
-                } else {
-                    alert("저장에 실패했습니다.");
-                }
-            } catch(e) {
-                alert("네트워크 오류가 발생했습니다.");
-            }
-        }
-
-        function editDiary(id, encodedContent, author) {
-            editingId = id;
-            window.editingAuthor = author;
-            document.getElementById('diaryContent').value = decodeURIComponent(encodedContent);
-            window.scrollTo({ top: 300, behavior: 'smooth' });
-        }
-
-        async function deleteDiary(id) {
-            if(!confirm("정말 이 일기를 삭제하시겠습니까?")) return;
-
-            try {
-                const res = await fetch(`${SUPABASE_URL}/rest/v1/journal_entries?id=eq.${id}`, {
-                    method: "DELETE",
-                    headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
-                });
-
-                if(res.ok) {
-                    await loadDiaries();
-                } else {
-                    alert("삭제에 실패했습니다.");
-                }
-            } catch(e) {
-                alert("네트워크 오류가 발생했습니다.");
-            }
-        }
-
-        function requestNotification() {
-            if (!("Notification" in window)) {
-                alert("이 브라우저는 알림을 지원하지 않습니다.");
-                return;
-            }
-            Notification.requestPermission().then(permission => {
-                if (permission === "granted") {
-                    alert("🔔 가족 알림이 허용되었습니다!");
-                } else {
-                    alert("알림 권한이 거부되었습니다.");
-                }
-            });
-        }
-    </script>
+<body class="pb-12">
+​<div class="max-w-md mx-auto min-h-screen flex flex-col">
+<!-- 상단 헤더 -->
+<header class="bg-white border-b px-5 py-4 sticky top-0 z-50 flex justify-between items-center shadow-sm">
+<div class="flex items-center space-x-3">
+<div class="w-10 h-10 bg-indigo-600 rounded-xl flex items-center justify-center text-white font-bold text-xl shadow">
+📖
+</div>
+<div>
+<h1 class="font-bold text-xl text-gray-800 leading-tight">서둥이네 한줄 일기장</h1>
+<p class="text-xs text-gray-400 mt-0.5">우리 가족 하루 기록하기</p>
+</div>
+</div>
+​<!-- 알림 및 연결 아이콘 -->
+<div class="flex items-center space-x-2">
+<button type="button" id="notifBtn" onclick="toggleNotification()" class="p-2.5 rounded-full bg-gray-100 text-gray-400 transition border-0" title="알림 설정">
+<i id="notifIcon" class="fa-solid fa-bell-slash text-lg"></i>
+</button>
+<div id="cloudStatus" class="p-2.5 rounded-full bg-gray-100 flex items-center justify-center" title="실시간 서버 연결 상태">
+<span id="cloudDot" class="w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse"></span>
+</div>
+</div>
+</header>
+​<!-- 메인 영역 -->
+<main class="flex-1 p-4 space-y-4">
+​<!-- 작성자 선택 (아담한 콤팩트 크기) -->
+<section class="bg-white rounded-2xl p-3 shadow-sm border border-gray-100">
+<label class="block text-xs font-bold text-gray-500 mb-2">
+<i class="fa-solid fa-user-group text-indigo-500 mr-1"></i>작성자 선택
+</label>
+<div id="authorList" class="grid grid-cols-3 gap-2">
+<!-- JS 생성 -->
+</div>
+</section>
+​<!-- 날짜 및 날씨 -->
+<section class="bg-white rounded-2xl px-4 py-3 shadow-sm border border-gray-100 flex justify-between items-center text-sm text-gray-700 font-semibold">
+<div class="flex items-center space-x-2">
+<i class="fa-regular fa-calendar-days text-indigo-500 text-base"></i>
+<span id="currentDateTime">--.--.--(--) --:--</span>
+</div>
+<div class="flex items-center space-x-1 text-amber-500">
+<span id="weatherIcon">☀️</span>
+<span id="weatherText" class="ml-1 text-gray-700">맑음</span>
+</div>
+</section>
+​<!-- 기분 & 활동 선택 -->
+<section class="bg-white rounded-2xl p-3.5 shadow-sm border border-gray-100">
+<label class="block text-xs font-bold text-gray-500 mb-2">
+<i class="fa-solid fa-face-smile text-amber-500 mr-1"></i>기분 & 활동 선택
+</label>
+<select id="moodSelect" class="w-full text-sm bg-gray-50 border border-gray-200 rounded-xl p-3 border-0 text-gray-800 font-medium">
+<option value="">오늘의 기분/활동을 선택해 보세요 👇</option>
+<option value="행복 😊">행복 😊</option>
+<option value="슬픔 😢">슬픔 😢</option>
+<option value="서운 🥺">서운 🥺</option>
+<option value="즐거움 😆">즐거움 😆</option>
+<option value="평온함 😌">평온함 😌</option>
+<option value="피곤함 🥱">피곤함 🥱</option>
+<option value="신남 🥳">신남 🥳</option>
+<option value="맛있는 식사 🍕">맛있는 식사 🍕</option>
+<option value="가족 나들이 🚗">가족 나들이 🚗</option>
+<option value="휴식 중 ☕">휴식 중 ☕</option>
+<option value="운동 완료 🏃">운동 완료 🏃</option>
+</select>
+</section>
+​<!-- 일기 작성창 -->
+<section class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3">
+<div class="flex justify-between items-center">
+<label class="text-sm font-bold text-gray-600">
+<i class="fa-solid fa-pen-to-square text-indigo-500 mr-1"></i>오늘 일기쓰기
+</label>
+<span class="text-xs text-indigo-500 font-medium">* 사진 1장 첨부 가능</span>
+</div>
+​<textarea id="journalInput" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full text-base p-3 bg-gray-50 border border-gray-200 rounded-xl resize-none text-gray-800 placeholder-gray-400"></textarea>
+​<!-- 사진 미리보기 -->
+<div id="photoPreviewContainer" class="hidden relative inline-block">
+<img id="photoPreview" class="w-16 h-16 object-cover rounded-xl border border-gray-200 shadow-sm" src="" alt="미리보기">
+<button type="button" onclick="removePhoto()" class="absolute -top-2 -right-2 bg-red-500 text-white w-5 h-5 rounded-full text-xs flex items-center justify-center shadow-md font-bold border-0">✕</button>
+</div>
+​<!-- 버튼 영역 -->
+<div class="flex space-x-2.5">
+<input type="file" id="photoInput" accept="image/*" class="hidden" onchange="handlePhotoSelect(event)">
+<button type="button" onclick="document.getElementById('photoInput').click()" class="flex-1 py-3 bg-gray-100 text-gray-700 rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 border-0">
+<i class="fa-solid fa-camera text-indigo-600"></i>
+<span>사진 첨부</span>
+</button>
+<button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-3 bg-indigo-600 text-white rounded-xl text-sm font-bold flex items-center justify-center space-x-1.5 shadow-md border-0">
+<i class="fa-solid fa-paper-plane"></i>
+<span id="submitBtnText">등록하기</span>
+</button>
+</div>
+</section>
+​<!-- 일기 목록 섹션 -->
+<section class="space-y-3 pt-1">
+<div class="flex justify-between items-center px-1">
+<h2 class="text-base font-bold text-gray-700">
+<i class="fa-solid fa-book-open text-indigo-500 mr-1"></i>우리 가족 일기 목록
+</h2>
+<button type="button" onclick="fetchEntries()" class="text-xs text-indigo-600 font-bold flex items-center space-x-1 border-0">
+<i class="fa-solid fa-rotate-right"></i>
+<span>새로고침</span>
+</button>
+</div>
+<div id="entriesList" class="space-y-3">
+<!-- 동적 목록 생성 -->
+</div>
+</section>
+</main>
+</div>
+​<script>
+const SUPABASE_URL = 'https://gookdripmzsaxfgfigai.supabase.co';
+const SUPABASE_KEY = 'sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo';
+const REST_ENDPOINT = ${SUPABASE_URL}/rest/v1/journal_entries;
+​const AUTHORS = [
+{ name: '아빠', icon: '👨' },
+{ name: '엄마', icon: '👩' },
+{ name: '딸', icon: '👧' }
+];
+​// 기본값 '엄마', 새로고침 후에도 자동 유지
+let selectedAuthor = localStorage.getItem('seodung_saved_author') || '엄마';
+let attachedPhotoBase64 = null;
+let editingEntryId = null;
+let entries = [];
+let previousCount = -1;
+​window.addEventListener('DOMContentLoaded', () => {
+initAuthorButtons();
+updateClock();
+setInterval(updateClock, 1000);
+checkNotificationPermission();
+​fetchEntries();
+setInterval(fetchEntries, 3000); // 3초마다 가족 실시간 자동 갱신
+});
+​function initAuthorButtons() {
+const container = document.getElementById('authorList');
+if (!container) return;
+​container.innerHTML = AUTHORS.map(author => <button type="button" onclick="selectAuthor('${author.name}')" id="author-btn-${author.name}"  class="py-1 px-2 border border-gray-200 rounded-lg text-xs flex items-center justify-center space-x-1 transition border-0 ${author.name === selectedAuthor ? 'active-author' : 'bg-gray-50 text-gray-600'}"> <span class="text-sm">${author.icon}</span> <span class="font-bold">${author.name}</span> </button>).join('');
+}
+​function selectAuthor(name) {
+selectedAuthor = name;
+localStorage.setItem('seodung_saved_author', name);
+​AUTHORS.forEach(a => {
+const btn = document.getElementById(author-btn-${a.name});
+if (btn) {
+if (a.name === name) btn.classList.add('active-author');
+else btn.classList.remove('active-author');
+}
+});
+​renderEntries();
+}
+​function updateClock() {
+const now = new Date();
+const days = ['일', '월', '화', '수', '목', '금', '토'];
+const dateStr = ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')}(${days[now.getDay()]}) ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')};
+const el = document.getElementById('currentDateTime');
+if (el) el.textContent = dateStr;
+}
+​function handlePhotoSelect(event) {
+const file = event.target.files[0];
+if (!file) return;
+​const reader = new FileReader();
+reader.onload = function(e) {
+const img = new Image();
+img.onload = function() {
+const canvas = document.createElement('canvas');
+let width = img.width;
+let height = img.height;
+const max_size = 500;
+​if (width > height) {
+if (width > max_size) {
+height *= max_size / width;
+width = max_size;
+}
+} else {
+if (height > max_size) {
+width *= max_size / height;
+height = max_size;
+}
+}
+canvas.width = width;
+canvas.height = height;
+const ctx = canvas.getContext('2d');
+ctx.drawImage(img, 0, 0, width, height);
+​attachedPhotoBase64 = canvas.toDataURL('image/jpeg', 0.6);
+document.getElementById('photoPreview').src = attachedPhotoBase64;
+document.getElementById('photoPreviewContainer').classList.remove('hidden');
+};
+img.src = e.target.result;
+};
+reader.readAsDataURL(file);
+}
+​function removePhoto() {
+attachedPhotoBase64 = null;
+document.getElementById('photoInput').value = '';
+document.getElementById('photoPreviewContainer').classList.add('hidden');
+}
+​async function fetchEntries() {
+try {
+const response = await fetch(${REST_ENDPOINT}?select=*, {
+method: 'GET',
+headers: {
+'apikey': SUPABASE_KEY,
+'Authorization': Bearer ${SUPABASE_KEY}
+}
+});
+​if (response.ok) {
+let data = await response.json();
+​data.sort((a, b) => {
+const idA = Number(a.id) || 0;
+const idB = Number(b.id) || 0;
+return idB - idA;
+});
+​// 새 일기 알림 팝업
+if (previousCount >= 0 && data.length > previousCount) {
+const newest = data[0];
+let authorName = typeof newest.author === 'object' ? (newest.author.name || '가족') : newest.author;
+if (authorName !== selectedAuthor) {
+triggerPushNotification(📝 [${authorName}]님의 새 일기!, newest.content || '새 일기를 확인해보세요.');
+}
+}
+​entries = data;
+previousCount = data.length;
+localStorage.setItem('seodung_journal', JSON.stringify(entries));
+renderEntries();
+updateCloudStatus(true);
+return;
+}
+throw new Error('Fetch status error');
+} catch (err) {
+const local = localStorage.getItem('seodung_journal');
+if (local) {
+try {
+entries = JSON.parse(local);
+renderEntries();
+} catch(e) {}
+}
+updateCloudStatus(false);
+}
+}
+​function updateCloudStatus(isOnline) {
+const dot = document.getElementById('cloudDot');
+if (dot) {
+dot.className = isOnline ? "w-3.5 h-3.5 rounded-full bg-emerald-500 animate-pulse" : "w-3.5 h-3.5 rounded-full bg-amber-400";
+}
+}
+​async function saveEntry() {
+const contentInput = document.getElementById('journalInput');
+const moodSelect = document.getElementById('moodSelect');
+const submitBtn = document.getElementById('submitBtn');
+​const content = contentInput.value.trim();
+const mood = moodSelect.value;
+​if (!content) {
+alert('일기 내용을 입력해 주세요!');
+return;
+}
+​submitBtn.disabled = true;
+submitBtn.classList.add('opacity-50');
+​const now = new Date();
+const dateStr = ${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')};
+​const payload = {
+author: String(selectedAuthor),
+content: String(content),
+mood: String(mood || ''),
+photo: String(attachedPhotoBase64 || ''),
+date: String(dateStr)
+};
+​try {
+if (editingEntryId) {
+await fetch(${REST_ENDPOINT}?id=eq.${editingEntryId}, {
+method: 'PATCH',
+headers: {
+'apikey': SUPABASE_KEY,
+'Authorization': Bearer ${SUPABASE_KEY},
+'Content-Type': 'application/json',
+'Prefer': 'return=representation'
+},
+body: JSON.stringify(payload)
+});
+} else {
+await fetch(REST_ENDPOINT, {
+method: 'POST',
+headers: {
+'apikey': SUPABASE_KEY,
+'Authorization': Bearer ${SUPABASE_KEY},
+'Content-Type': 'application/json',
+'Prefer': 'return=representation'
+},
+body: JSON.stringify(payload)
+});
+}
+​editingEntryId = null;
+document.getElementById('submitBtnText').textContent = '등록하기';
+contentInput.value = '';
+moodSelect.value = '';
+removePhoto();
+​await fetchEntries();
+} catch (e) {
+alert("저장 중 오류가 발생했습니다. 다시 시도해 주세요.");
+} finally {
+submitBtn.disabled = false;
+submitBtn.classList.remove('opacity-50');
+}
+}
+​function renderEntries() {
+const container = document.getElementById('entriesList');
+if (!container) return;
+​if (!entries || entries.length === 0) {
+container.innerHTML = <div class="bg-white rounded-2xl p-8 text-center text-gray-400 text-sm shadow-sm border border-gray-100"> 아직 공유된 일기가 없습니다.<br>첫 번째 일기를 남겨보세요! ✏️ </div>;
+return;
+}
+​container.innerHTML = entries.map(item => {
+let authorName = typeof item.author === 'object' ? (item.author.name || '가족') : item.author;
+if (!authorName) authorName = '가족';
+​const authorObj = AUTHORS.find(a => a.name === authorName);
+const icon = authorObj ? authorObj.icon : '👤';
+​// 현재 선택된 작성자와 일치할 때만 수정/삭제 권한 부여
+const isMyEntry = (authorName === selectedAuthor);
+​return <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100 space-y-3"> <div class="flex justify-between items-center text-xs"> <div class="flex items-center space-x-1.5 font-bold text-gray-800 text-sm"> <span class="text-base">${icon}</span> <span>${authorName}</span> ${item.mood ?<span class="text-xs bg-indigo-50 text-indigo-600 px-2 py-0.5 rounded-md font-medium ml-1">${item.mood}</span>: ''} </div> <div class="flex items-center space-x-2 text-gray-400 text-xs font-medium"> <span>${item.date || ''}</span> ${isMyEntry ?
+<button type="button" onclick="editEntry('${item.id}')" class="text-indigo-600 border-0 p-1">✏️</button>
+<button type="button" onclick="deleteEntry('${item.id}')" class="text-red-500 border-0 p-1">✕</button>
+` : ''}
+</div>
+</div>
+​<div class="flex items-start space-x-3 pt-1">
+<div class="flex-1 text-base text-gray-800 whitespace-pre-wrap leading-relaxed font-normal">${escapeHtml(item.content)}</div>
+${item.photo ? <img src="${item.photo}" class="w-16 h-16 object-cover rounded-xl border border-gray-100 shadow-sm flex-shrink-0" alt="첨부 사진"> : ''}
+</div>
+</div>
+`;
+}).join('');
+}
+​function editEntry(id) {
+const entry = entries.find(e => String(e.id) === String(id));
+if (!entry) return;
+​editingEntryId = entry.id;
+const authorName = typeof entry.author === 'object' ? entry.author.name : entry.author;
+selectAuthor(authorName);
+​document.getElementById('journalInput').value = entry.content || '';
+document.getElementById('moodSelect').value = entry.mood || '';
+​if (entry.photo) {
+attachedPhotoBase64 = entry.photo;
+document.getElementById('photoPreview').src = entry.photo;
+document.getElementById('photoPreviewContainer').classList.remove('hidden');
+} else {
+removePhoto();
+}
+​document.getElementById('submitBtnText').textContent = '수정 완료';
+window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+​async function deleteEntry(id) {
+if (confirm('이 일기를 삭제하시겠습니까? (가족 디바이스에서도 함께 지워집니다)')) {
+entries = entries.filter(e => String(e.id) !== String(id));
+localStorage.setItem('seodung_journal', JSON.stringify(entries));
+renderEntries();
+​try {
+await fetch(${REST_ENDPOINT}?id=eq.${id}, {
+method: 'DELETE',
+headers: {
+'apikey': SUPABASE_KEY,
+'Authorization': Bearer ${SUPABASE_KEY}
+}
+});
+} catch(e) {}
+}
+}
+​function escapeHtml(text) {
+return text ? String(text).replace(/&/g, "&").replace(/</g, "<").replace(/>/g, ">") : '';
+}
+​function checkNotificationPermission() {
+const icon = document.getElementById('notifIcon');
+const btn = document.getElementById('notifBtn');
+if (Notification.permission === 'granted') {
+if (icon) icon.className = 'fa-solid fa-bell text-lg text-indigo-600';
+if (btn) btn.className = 'p-2.5 rounded-full bg-indigo-50 text-indigo-600 transition';
+} else {
+if (icon) icon.className = 'fa-solid fa-bell-slash text-lg text-gray-400';
+if (btn) btn.className = 'p-2.5 rounded-full bg-gray-100 text-gray-400 transition';
+}
+}
+​function toggleNotification() {
+if (!("Notification" in window)) {
+alert("브라우저가 알림을 지원하지 않습니다.");
+return;
+}
+​if (Notification.permission === "granted") {
+alert("🔔 푸시 알림이 활성화되어 있습니다!");
+} else {
+Notification.requestPermission().then(permission => {
+checkNotificationPermission();
+if (permission === "granted") {
+triggerPushNotification("🔔 가족 알림 수신 동의 완료!", "이제 다른 가족이 일기를 올리면 알려드립니다.");
+}
+});
+}
+}
+​function triggerPushNotification(title, body) {
+if (Notification.permission === 'granted') {
+new Notification(title, {
+body: body,
+icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png'
+});
+}
+}
+</script>
 </body>
 </html>
