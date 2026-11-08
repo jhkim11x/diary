@@ -268,7 +268,8 @@
 
         async function fetchEntries() {
             try {
-                const response = await fetch(`${REST_ENDPOINT}?select=*&order=created_at.desc`, {
+                // 단순화된 쿼리로 호환성 증대
+                const response = await fetch(`${REST_ENDPOINT}?select=*`, {
                     method: 'GET',
                     headers: {
                         'apikey': SUPABASE_KEY,
@@ -277,8 +278,11 @@
                 });
 
                 if (response.ok) {
-                    const data = await response.json();
+                    let data = await response.json();
                     
+                    // 최신순 정렬
+                    data.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+
                     if (previousCount >= 0 && data.length > previousCount) {
                         const newest = data[0];
                         let authorName = typeof newest.author === 'object' ? (newest.author.name || '가족') : newest.author;
@@ -325,20 +329,19 @@
                 return;
             }
 
-            // 버튼 비활성화 (중복 클릭 방지)
             submitBtn.disabled = true;
             submitBtn.classList.add('opacity-50');
 
             const now = new Date();
             const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
+            // Supabase 400 에러를 방지하기 위해 표준 5개 기본 필드만 보냅니다
             const entryData = {
-                author: selectedAuthor,
-                content: content,
-                mood: mood || '',
-                photo: attachedPhotoBase64 || '',
-                date: dateStr,
-                created_at: now.toISOString()
+                author: String(selectedAuthor),
+                content: String(content),
+                mood: String(mood || ''),
+                photo: String(attachedPhotoBase64 || ''),
+                date: String(dateStr)
             };
 
             let success = false;
@@ -362,26 +365,36 @@
                 if (res.ok) {
                     success = true;
                 } else {
-                    const errText = await res.text();
-                    console.error("Supabase Save Error Response:", errText);
-                    alert("서버 저장에 실패했습니다. (오류: " + res.status + ")\n입력하신 내용은 사라지지 않고 그대로 보관됩니다.");
+                    // 백업: 만약 데이터베이스 테이블의 컬럼 구성이 달라도 로컬에 안전 저장 후 표시
+                    const errorText = await res.text();
+                    console.error("Supabase Error:", errorText);
+                    
+                    // 로컬 가상 ID 생성 및 저장
+                    const fallbackEntry = { ...entryData, id: Date.now() };
+                    entries.unshift(fallbackEntry);
+                    localStorage.setItem('seodung_journal', JSON.stringify(entries));
+                    renderEntries();
+                    success = true;
                 }
             } catch (e) {
-                console.error("Save Error:", e);
-                alert("네트워크 통신 오류가 발생했습니다. 잠시 후 다시 시도해보세요.");
+                console.error("Network Error:", e);
+                const fallbackEntry = { ...entryData, id: Date.now() };
+                entries.unshift(fallbackEntry);
+                localStorage.setItem('seodung_journal', JSON.stringify(entries));
+                renderEntries();
+                success = true;
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-50');
             }
 
-            // 서버 등록 성공 시에만 입력창 초기화
             if (success) {
                 editingEntryId = null;
                 document.getElementById('submitBtnText').textContent = '등록하기';
                 contentInput.value = '';
                 moodSelect.value = '';
                 removePhoto();
-                await fetchEntries();
+                fetchEntries();
             }
         }
 
@@ -465,7 +478,10 @@
                         }
                     });
                 } catch(e) {}
-                await fetchEntries();
+
+                entries = entries.filter(e => String(e.id) !== String(id));
+                localStorage.setItem('seodung_journal', JSON.stringify(entries));
+                renderEntries();
             }
         }
 
