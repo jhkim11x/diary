@@ -103,7 +103,7 @@
             initDate();
             initAuthorUI();
             loadDiaries();
-            setInterval(loadDiaries, 5000);
+            setInterval(loadDiaries, 4000); // 4초마다 실시간 동기화
         });
 
         function initDate() {
@@ -135,14 +135,14 @@
 
         function getLocalDiaries() {
             try {
-                return JSON.parse(localStorage.getItem("local_family_diaries") || "[]");
+                return JSON.parse(localStorage.getItem("local_family_diaries_v2") || "[]");
             } catch(e) {
                 return [];
             }
         }
 
         function saveLocalDiaries(list) {
-            localStorage.setItem("local_family_diaries", JSON.stringify(list));
+            localStorage.setItem("local_family_diaries_v2", JSON.stringify(list));
         }
 
         async function loadDiaries() {
@@ -175,10 +175,19 @@
 
             container.innerHTML = diaries.map(item => {
                 let authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
-                let contentText = typeof item.content === 'string' ? item.content : '';
+                let rawContent = typeof item.content === 'string' ? item.content : '';
                 
-                if(contentText.includes("코다리덕장")) {
+                if(rawContent.includes("코다리덕장")) {
                     authorName = "엄마";
+                }
+
+                // 기분/활동 꼬리표([화남] 등)가 있다면 화면에 보이지 않도록 깔끔하게 제거
+                let cleanContent = rawContent;
+                if(cleanContent.startsWith("[")) {
+                    let closingIdx = cleanContent.indexOf("]");
+                    if(closingIdx !== -1) {
+                        cleanContent = cleanContent.substring(closingIdx + 1).trim();
+                    }
                 }
 
                 const dateText = typeof item.date === 'string' ? item.date : '';
@@ -195,12 +204,12 @@
                             <div class="flex items-center space-x-2">
                                 <span class="text-sm text-slate-400 font-semibold">${dateText}</span>
                                 ${isOwner ? `
-                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-base p-1">✏️</button>
+                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(cleanContent)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-base p-1">✏️</button>
                                     <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-base p-1">✕</button>
                                 ` : ''}
                             </div>
                         </div>
-                        <p class="text-base text-slate-900 whitespace-pre-line leading-relaxed font-bold">${contentText}</p>
+                        <p class="text-base text-slate-900 whitespace-pre-line leading-relaxed font-bold">${cleanContent}</p>
                     </div>
                 `;
             }).join('');
@@ -228,6 +237,7 @@
                 date: dateStr
             };
 
+            // 1. 브라우저 로컬 저장소 즉시 반영 (공유 지연 방지)
             let localList = getLocalDiaries();
             if(editingId) {
                 localList = localList.map(item => item.id === editingId ? entryData : item);
@@ -236,6 +246,7 @@
             }
             saveLocalDiaries(localList);
 
+            // 2. Supabase 서버 비동기 전송
             try {
                 let url = `${SUPABASE_URL}/rest/v1/journal_entries`;
                 let method = "POST";
@@ -271,17 +282,7 @@
         function editDiary(id, encodedContent, author) {
             editingId = id;
             window.editingAuthor = author;
-            let rawContent = decodeURIComponent(encodedContent);
-            if(rawContent.startsWith("[")) {
-                let closingIdx = rawContent.indexOf("]");
-                if(closingIdx !== -1) {
-                    let moodPart = rawContent.substring(1, closingIdx);
-                    let sel = document.getElementById('moodSelect');
-                    if(sel) sel.value = moodPart;
-                    rawContent = rawContent.substring(closingIdx + 1).trim();
-                }
-            }
-            document.getElementById('diaryContent').value = rawContent;
+            document.getElementById('diaryContent').value = decodeURIComponent(encodedContent);
             window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
