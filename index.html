@@ -12,7 +12,7 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-800 min-h-screen pb-12">
-    <div class="max-w-md mx-auto p-4 space-y-5">
+    <div class="max-w-md mx-auto p-4 space-y-5 text-base font-medium">
         <!-- Header -->
         <header class="bg-white p-5 rounded-2xl shadow-sm flex items-center justify-between border border-slate-100">
             <div class="flex items-center space-x-3">
@@ -23,14 +23,14 @@
                 </div>
             </div>
             <div class="flex items-center space-x-3">
-                <button onclick="requestNotification()" id="notifBtn" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-base">🔔</button>
+                <button onclick="requestNotification()" id="notifBtn" class="p-3 rounded-xl bg-slate-50 hover:bg-slate-100 text-slate-600 text-lg">🔔</button>
                 <div id="syncStatus" class="w-3.5 h-3.5 rounded-full bg-emerald-500 shadow-sm" title="실시간 공유 연결됨"></div>
             </div>
         </header>
 
         <!-- Author Selection -->
         <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-            <label class="block text-sm font-bold text-slate-500 mb-3">👤 작성자 선택</label>
+            <label class="block text-base font-bold text-slate-600 mb-3">👤 작성자 선택</label>
             <div class="grid grid-cols-3 gap-2.5">
                 <button onclick="setAuthor('아빠', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👨</span><span>아빠</span></button>
                 <button onclick="setAuthor('엄마', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👩</span><span>엄마</span></button>
@@ -39,15 +39,15 @@
         </section>
 
         <!-- Date & Weather Info -->
-        <div class="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between text-sm font-semibold text-slate-600">
+        <div class="bg-white px-5 py-4 rounded-2xl shadow-sm border border-slate-100 flex items-center justify-between text-base font-semibold text-slate-700">
             <span id="currentDateDisp">📅 날짜 로딩중...</span>
             <span id="weatherDisp">☀️ 맑음</span>
         </div>
 
         <!-- Mood & Activity Selection -->
         <section class="bg-white p-4 rounded-2xl shadow-sm border border-slate-100">
-            <label class="block text-sm font-bold text-slate-500 mb-3">😊 기분 & 활동 선택</label>
-            <select id="moodSelect" class="w-full p-3.5 text-base font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500">
+            <label class="block text-base font-bold text-slate-600 mb-3">😊 기분 & 활동 선택</label>
+            <select id="moodSelect" class="w-full p-3.5 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500">
                 <option value="행복 ☺️">행복 ☺️</option>
                 <option value="기쁨 🎉">기쁨 🎉</option>
                 <option value="평온 😌">평온 😌</option>
@@ -67,11 +67,11 @@
         <!-- Write Entry -->
         <section class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-4">
             <div class="flex justify-between items-center">
-                <label class="text-sm font-bold text-slate-500">✍️ 오늘 일기쓰기</label>
+                <label class="text-base font-bold text-slate-600">✍️ 오늘 일기쓰기</label>
             </div>
-            <textarea id="diaryContent" rows="3" class="w-full p-4 text-base font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 resize-none" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..."></textarea>
+            <textarea id="diaryContent" rows="3" class="w-full p-4 text-base font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 resize-none" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..."></textarea>
             
-            <button onclick="saveDiary()" class="w-full py-3.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-bold rounded-xl shadow-md shadow-indigo-100 transition">
+            <button onclick="saveDiary()" class="w-full py-4 px-3 bg-indigo-600 hover:bg-indigo-700 text-white text-base font-bold rounded-xl shadow-md shadow-indigo-100 transition">
                 📝 등록하기
             </button>
         </section>
@@ -80,12 +80,12 @@
         <section class="space-y-3.5">
             <div class="flex items-center justify-between px-1">
                 <h2 class="text-base font-extrabold text-slate-800">📖 우리 가족 일기 목록</h2>
-                <button onclick="loadDiaries()" class="text-sm text-indigo-600 font-bold hover:text-indigo-700 flex items-center space-x-1">
+                <button onclick="loadDiaries()" class="text-base text-indigo-600 font-bold hover:text-indigo-700 flex items-center space-x-1">
                     <span>새로고침</span>
                 </button>
             </div>
             <div id="diaryList" class="space-y-3.5">
-                <div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-sm font-medium border border-slate-100">
+                <div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-base font-medium border border-slate-100">
                     일기를 불러오는 중입니다... ⏳
                 </div>
             </div>
@@ -154,12 +154,9 @@
                 if(res.ok) {
                     remoteData = await res.json();
                 }
-            } catch(e) {
-                console.error("원격 동기화 오류:", e);
-            }
+            } catch(e) {}
 
             const localData = getLocalDiaries();
-            // 로컬 데이터와 서버 데이터 병합 (id 기준 중복 제거)
             const combinedMap = new Map();
             remoteData.forEach(item => combinedMap.set(String(item.id), item));
             localData.forEach(item => combinedMap.set(String(item.id), item));
@@ -172,7 +169,7 @@
         function renderDiaryList(diaries) {
             const container = document.getElementById('diaryList');
             if(!diaries || diaries.length === 0) {
-                container.innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-sm font-medium border border-slate-100">아직 공유된 일기가 없습니다.<br>첫 번째 일기를 남겨보세요! ✍️</div>`;
+                container.innerHTML = `<div class="bg-white p-6 rounded-2xl text-center text-slate-400 text-base font-medium border border-slate-100">아직 공유된 일기가 없습니다.<br>첫 번째 일기를 남겨보세요! ✍️</div>`;
                 return;
             }
 
@@ -191,19 +188,19 @@
                 return `
                     <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-100 space-y-3">
                         <div class="flex items-center justify-between">
-                            <div class="flex items-center space-x-2">
-                                <span class="w-8 h-8 bg-slate-100 rounded-full flex items-center justify-center text-sm">${authorEmoji}</span>
-                                <span class="font-extrabold text-sm text-slate-800">${authorName}</span>
+                            <div class="flex items-center space-x-2.5">
+                                <span class="w-9 h-9 bg-slate-100 rounded-full flex items-center justify-center text-base">${authorEmoji}</span>
+                                <span class="font-extrabold text-base text-slate-900">${authorName}</span>
                             </div>
                             <div class="flex items-center space-x-2">
-                                <span class="text-xs text-slate-400 font-medium">${dateText}</span>
+                                <span class="text-sm text-slate-400 font-semibold">${dateText}</span>
                                 ${isOwner ? `
-                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-sm p-1">✏️</button>
-                                    <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-sm p-1">✕</button>
+                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-base p-1">✏️</button>
+                                    <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-base p-1">✕</button>
                                 ` : ''}
                             </div>
                         </div>
-                        <p class="text-sm text-slate-800 whitespace-pre-line leading-relaxed font-medium">${contentText}</p>
+                        <p class="text-base text-slate-900 whitespace-pre-line leading-relaxed font-bold">${contentText}</p>
                     </div>
                 `;
             }).join('');
@@ -231,7 +228,6 @@
                 date: dateStr
             };
 
-            // 1. 로컬 저장소 우선 보장 (절대 날아가거나 에러 발생하지 않음)
             let localList = getLocalDiaries();
             if(editingId) {
                 localList = localList.map(item => item.id === editingId ? entryData : item);
@@ -240,7 +236,6 @@
             }
             saveLocalDiaries(localList);
 
-            // 2. Supabase 서버 백그라운드 전송
             try {
                 let url = `${SUPABASE_URL}/rest/v1/journal_entries`;
                 let method = "POST";
@@ -265,11 +260,8 @@
                         date: dateStr
                     })
                 });
-            } catch(e) {
-                console.log("서버 전송 대기중 (로컬 저장소 보관 완료)");
-            }
+            } catch(e) {}
 
-            // UI 즉시 갱신
             document.getElementById('diaryContent').value = "";
             editingId = null;
             window.editingAuthor = null;
@@ -296,7 +288,6 @@
         async function deleteDiary(id) {
             if(!confirm("정말 이 일기를 삭제하시겠습니까?")) return;
             
-            // 로컬 저장소 삭제
             let localList = getLocalDiaries().filter(item => item.id !== id);
             saveLocalDiaries(localList);
 
