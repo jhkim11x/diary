@@ -156,7 +156,6 @@
     </div>
 
     <script>
-        // Supabase REST API 설정
         const SUPABASE_URL = 'https://gookdripmzsaxfgfigai.supabase.co';
         const SUPABASE_KEY = 'sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo';
         const REST_ENDPOINT = `${SUPABASE_URL}/rest/v1/journal_entries`;
@@ -165,7 +164,7 @@
             'apikey': SUPABASE_KEY,
             'Authorization': `Bearer ${SUPABASE_KEY}`,
             'Content-Type': 'application/json',
-            'Prefer': 'return=representation'
+            'Prefer': 'return=minimal'
         };
 
         const AUTHORS = [
@@ -268,7 +267,6 @@
 
         async function fetchEntries() {
             try {
-                // 단순화된 쿼리로 호환성 증대
                 const response = await fetch(`${REST_ENDPOINT}?select=*`, {
                     method: 'GET',
                     headers: {
@@ -280,7 +278,6 @@
                 if (response.ok) {
                     let data = await response.json();
                     
-                    // 최신순 정렬
                     data.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
 
                     if (previousCount >= 0 && data.length > previousCount) {
@@ -335,7 +332,6 @@
             const now = new Date();
             const dateStr = `${now.getFullYear()}.${String(now.getMonth()+1).padStart(2,'0')}.${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
 
-            // Supabase 400 에러를 방지하기 위해 표준 5개 기본 필드만 보냅니다
             const entryData = {
                 author: String(selectedAuthor),
                 content: String(content),
@@ -344,58 +340,45 @@
                 date: String(dateStr)
             };
 
-            let success = false;
+            // 화면에 먼저 반영 (사용자 체감속도 즉시화)
+            const localNewEntry = { ...entryData, id: Date.now() };
+            if (!editingEntryId) {
+                entries.unshift(localNewEntry);
+            } else {
+                const idx = entries.findIndex(e => String(e.id) === String(editingEntryId));
+                if (idx !== -1) entries[idx] = { ...entries[idx], ...entryData };
+            }
+            renderEntries();
 
             try {
-                let res;
                 if (editingEntryId) {
-                    res = await fetch(`${REST_ENDPOINT}?id=eq.${editingEntryId}`, {
+                    await fetch(`${REST_ENDPOINT}?id=eq.${editingEntryId}`, {
                         method: 'PATCH',
                         headers: HEADERS,
                         body: JSON.stringify(entryData)
                     });
                 } else {
-                    res = await fetch(REST_ENDPOINT, {
+                    await fetch(REST_ENDPOINT, {
                         method: 'POST',
                         headers: HEADERS,
                         body: JSON.stringify(entryData)
                     });
                 }
-
-                if (res.ok) {
-                    success = true;
-                } else {
-                    // 백업: 만약 데이터베이스 테이블의 컬럼 구성이 달라도 로컬에 안전 저장 후 표시
-                    const errorText = await res.text();
-                    console.error("Supabase Error:", errorText);
-                    
-                    // 로컬 가상 ID 생성 및 저장
-                    const fallbackEntry = { ...entryData, id: Date.now() };
-                    entries.unshift(fallbackEntry);
-                    localStorage.setItem('seodung_journal', JSON.stringify(entries));
-                    renderEntries();
-                    success = true;
-                }
             } catch (e) {
-                console.error("Network Error:", e);
-                const fallbackEntry = { ...entryData, id: Date.now() };
-                entries.unshift(fallbackEntry);
-                localStorage.setItem('seodung_journal', JSON.stringify(entries));
-                renderEntries();
-                success = true;
+                console.error("Cloud Push Error:", e);
             } finally {
                 submitBtn.disabled = false;
                 submitBtn.classList.remove('opacity-50');
             }
 
-            if (success) {
-                editingEntryId = null;
-                document.getElementById('submitBtnText').textContent = '등록하기';
-                contentInput.value = '';
-                moodSelect.value = '';
-                removePhoto();
-                fetchEntries();
-            }
+            editingEntryId = null;
+            document.getElementById('submitBtnText').textContent = '등록하기';
+            contentInput.value = '';
+            moodSelect.value = '';
+            removePhoto();
+            
+            // DB 최종 동기화
+            setTimeout(fetchEntries, 500);
         }
 
         function renderEntries() {
@@ -469,6 +452,10 @@
 
         async function deleteEntry(id) {
             if (confirm('이 일기를 삭제하시겠습니까? (가족 디바이스에서도 함께 지워집니다)')) {
+                entries = entries.filter(e => String(e.id) !== String(id));
+                localStorage.setItem('seodung_journal', JSON.stringify(entries));
+                renderEntries();
+
                 try {
                     await fetch(`${REST_ENDPOINT}?id=eq.${id}`, {
                         method: 'DELETE',
@@ -478,10 +465,6 @@
                         }
                     });
                 } catch(e) {}
-
-                entries = entries.filter(e => String(e.id) !== String(id));
-                localStorage.setItem('seodung_journal', JSON.stringify(entries));
-                renderEntries();
             }
         }
 
