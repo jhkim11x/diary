@@ -51,9 +51,16 @@
                 <option value="행복 ☺️">행복 ☺️</option>
                 <option value="기쁨 🎉">기쁨 🎉</option>
                 <option value="평온 😌">평온 😌</option>
+                <option value="서운 🥺">서운 🥺</option>
                 <option value="피곤 🥱">피곤 🥱</option>
                 <option value="슬픔 😢">슬픔 😢</option>
                 <option value="화남 😡">화남 😡</option>
+                <option value="산책 🚶‍♂️">산책 🚶‍♂️</option>
+                <option value="운동 🏃‍♂️">운동 🏃‍♂️</option>
+                <option value="독서 📚">독서 📚</option>
+                <option value="요리 🍳">요리 🍳</option>
+                <option value="여행 ✈️">여행 ✈️</option>
+                <option value="쇼핑 🛍️">쇼핑 🛍️</option>
             </select>
         </section>
 
@@ -180,9 +187,15 @@
             }
 
             container.innerHTML = diaries.map(item => {
-                const authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
+                let authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
+                let contentText = typeof item.content === 'string' ? item.content : '';
+                
+                // 강제 보정: "코다리덕장" 일기는 무조건 엄마로 고정
+                if(contentText.includes("코다리덕장")) {
+                    authorName = "엄마";
+                }
+
                 const moodText = typeof item.mood === 'string' ? item.mood : '';
-                const contentText = typeof item.content === 'string' ? item.content : '';
                 const dateText = typeof item.date === 'string' ? item.date : '';
                 const photoUrl = typeof item.photo === 'string' ? item.photo : '';
 
@@ -223,14 +236,12 @@
                 return;
             }
 
-            // 수정 중일 때는 기존 작성자 유지, 새로 작성할 때는 현재 선택된 작성자 사용
             const targetAuthor = editingId ? (window.editingAuthor || currentAuthor) : currentAuthor;
 
+            // Supabase 테이블 구조 충돌 방지를 위해 기본 컬럼(author, content, date)만 전송
             const payload = {
                 author: targetAuthor,
-                content: content,
-                mood: mood,
-                photo: uploadedImageBase64 || "",
+                content: `[${mood}] ${content}`,
                 date: dateStr
             };
 
@@ -241,7 +252,7 @@
                     "apikey": SUPABASE_KEY,
                     "Authorization": `Bearer ${SUPABASE_KEY}`,
                     "Content-Type": "application/json",
-                    "Prefer": "return:minimal"
+                    "Prefer": "return=minimal"
                 };
 
                 if(editingId) {
@@ -273,7 +284,6 @@
             editingId = id;
             window.editingAuthor = author;
             document.getElementById('diaryContent').value = decodeURIComponent(encodedContent);
-            document.getElementById('moodSelect').value = mood;
             window.scrollTo({ top: 300, behavior: 'smooth' });
         }
 
