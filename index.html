@@ -2,7 +2,15 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    
+    <!-- 주소창 숨김 및 독립형 앱 설정 (PWA / Fullscreen Mobile App) -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="theme-color" content="#ffffff">
+    <link rel="manifest" href="data:application/manifest+json;charset=utf-8,%7B%22name%22%3A%22%EC%84%9C%EB%93%A1%EC%9D%B4%EB%84%A4%20%ED%95%9C%EC%A5%B4%20%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22short_name%22%3A%22%EC%9D%BC%EA%B8%B0%EC%9E%A5%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23ffffff%22%2C%22theme_color%22%3A%22%234f46e5%22%7D">
+
     <title>서둥이네 한줄 일기장</title>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
