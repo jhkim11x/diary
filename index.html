@@ -33,8 +33,8 @@
             <label class="block text-sm font-bold text-slate-500 mb-3">👤 작성자 선택</label>
             <div class="grid grid-cols-3 gap-2.5">
                 <button onclick="setAuthor('아빠', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👨</span><span>아빠</span></button>
-                <button onclick="setAuthor('엄마', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-700 flex items-center justify-center space-x-1.5"><span>👩</span><span>엄마</span></button>
-                <button onclick="setAuthor('딸', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-xs text-slate-700 flex items-center justify-center space-x-1.5"><span>👧</span><span>딸</span></button>
+                <button onclick="setAuthor('엄마', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👩</span><span>엄마</span></button>
+                <button onclick="setAuthor('딸', this)" class="author-btn py-3 px-2 rounded-xl border border-slate-200 bg-white text-base font-bold text-slate-700 flex items-center justify-center space-x-1.5"><span>👧</span><span>딸</span></button>
             </div>
         </section>
 
@@ -180,7 +180,7 @@
             }
 
             container.innerHTML = diaries.map(item => {
-                const authorName = typeof item.author === 'string' ? item.author : '아빠';
+                const authorName = typeof item.author === 'string' && item.author.trim() !== '' ? item.author : '아빠';
                 const moodText = typeof item.mood === 'string' ? item.mood : '';
                 const contentText = typeof item.content === 'string' ? item.content : '';
                 const dateText = typeof item.date === 'string' ? item.date : '';
@@ -200,7 +200,7 @@
                             <div class="flex items-center space-x-2">
                                 <span class="text-xs text-slate-400 font-medium">${dateText}</span>
                                 ${isOwner ? `
-                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${moodText}\`)" class="text-slate-400 hover:text-indigo-600 text-sm p-1">✏️</button>
+                                    <button onclick="editDiary(${item.id}, \`${encodeURIComponent(contentText)}\`, \`${moodText}\`, \`${authorName}\`)" class="text-slate-400 hover:text-indigo-600 text-sm p-1">✏️</button>
                                     <button onclick="deleteDiary(${item.id})" class="text-slate-400 hover:text-rose-500 text-sm p-1">✕</button>
                                 ` : ''}
                             </div>
@@ -223,8 +223,11 @@
                 return;
             }
 
+            // 수정 중일 때는 기존 작성자 유지, 새로 작성할 때는 현재 선택된 작성자 사용
+            const targetAuthor = editingId ? (window.editingAuthor || currentAuthor) : currentAuthor;
+
             const payload = {
-                author: currentAuthor,
+                author: targetAuthor,
                 content: content,
                 mood: mood,
                 photo: uploadedImageBase64 || "",
@@ -238,7 +241,7 @@
                     "apikey": SUPABASE_KEY,
                     "Authorization": `Bearer ${SUPABASE_KEY}`,
                     "Content-Type": "application/json",
-                    "Prefer": "return=minimal"
+                    "Prefer": "return:minimal"
                 };
 
                 if(editingId) {
@@ -256,6 +259,7 @@
                     document.getElementById('diaryContent').value = "";
                     removeImage();
                     editingId = null;
+                    window.editingAuthor = null;
                     await loadDiaries();
                 } else {
                     alert("저장에 실패했습니다.");
@@ -265,8 +269,9 @@
             }
         }
 
-        function editDiary(id, encodedContent, mood) {
+        function editDiary(id, encodedContent, mood, author) {
             editingId = id;
+            window.editingAuthor = author;
             document.getElementById('diaryContent').value = decodeURIComponent(encodedContent);
             document.getElementById('moodSelect').value = mood;
             window.scrollTo({ top: 300, behavior: 'smooth' });
