@@ -31,7 +31,7 @@
         ];
 
         const TAG_CATEGORIES = [
-            { label: '😊 기분 선택', tags: ['기쁨 😆', '신남 🎉', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
+            { label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
             { label: '⚽ 활동 선택', tags: ['가족 나들이 🚗', '맛있는 식사 🍕', '운동/산책 🏃', '영화/TV 🎬', '휴식 ☕', '쇼핑 🛍️', '공부/독서 📚'] }
         ];
 
@@ -79,11 +79,13 @@
             const statusBadge = document.getElementById('cloudStatusBadge');
             if (statusBadge) {
                 if (window.isCloudMode) {
-                    statusBadge.className = "bg-emerald-100 text-emerald-700 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm";
-                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span> 🟢 실시간 공유 중`;
+                    statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
+                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>`;
+                    statusBadge.title = "실시간 공유 중";
                 } else {
-                    statusBadge.className = "bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5 shadow-sm";
-                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> ● 내 기기 저장`;
+                    statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
+                    statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>`;
+                    statusBadge.title = "내 기기 저장 모드";
                 }
             }
 
@@ -120,7 +122,6 @@
             const weatherEl = document.getElementById('weatherInfo');
             if (!weatherEl) return;
             try {
-                // Open-Meteo 무료 날씨 API (서울/경기 기준)
                 const res = await fetch('https://api.open-meteo.com/v1/forecast?latitude=37.5665&longitude=126.9780&current_weather=true');
                 const data = await res.json();
                 if (data && data.current_weather) {
@@ -151,9 +152,9 @@
                 const isSelected = author.id === selectedAuthor;
                 const btn = document.createElement('button');
                 btn.type = 'button';
-                btn.className = `flex-1 py-2.5 px-3 rounded-xl border flex items-center justify-center gap-2 font-bold text-sm transition-all ${
+                btn.className = `flex-1 py-2 px-2.5 rounded-xl border flex items-center justify-center gap-1.5 font-bold text-xs transition-all ${
                     isSelected 
-                    ? `${author.color} text-white border-transparent shadow-md scale-105` 
+                    ? `${author.color} text-white border-transparent shadow-sm scale-102` 
                     : `bg-white ${author.text} border-slate-200 hover:bg-slate-50`
                 }`;
                 btn.innerHTML = `<i class="fa-solid ${author.icon}"></i> ${author.name}`;
@@ -203,7 +204,7 @@
             container.innerHTML = '';
             selectedTags.forEach(tag => {
                 const badge = document.createElement('span');
-                badge.className = "inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200";
+                badge.className = "inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-700 text-xs font-bold border border-indigo-200";
                 badge.innerHTML = `${tag} <i class="fa-solid fa-xmark cursor-pointer hover:text-rose-500" onclick="removeTag('${tag}')"></i>`;
                 container.appendChild(badge);
             });
@@ -226,11 +227,13 @@
             const btn = document.getElementById('notifToggleBtn');
             if (!btn) return;
             if (permission === "granted") {
-                btn.className = "text-xs font-bold text-emerald-600 bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-full flex items-center gap-1";
-                btn.innerHTML = `<i class="fa-solid fa-bell"></i> 알림 켜짐`;
+                btn.className = "w-7 h-7 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors";
+                btn.innerHTML = `<i class="fa-solid fa-bell text-xs"></i>`;
+                btn.title = "알림 켜짐";
             } else {
-                btn.className = "text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2.5 py-1 rounded-full flex items-center gap-1 cursor-pointer";
-                btn.innerHTML = `<i class="fa-solid fa-bell-slash"></i> 알림 켜기`;
+                btn.className = "w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer";
+                btn.innerHTML = `<i class="fa-solid fa-bell-slash text-xs"></i>`;
+                btn.title = "알림 켜기";
                 btn.onclick = () => {
                     Notification.requestPermission().then(p => updateNotificationBadge(p));
                 };
@@ -280,7 +283,7 @@
                     const canvas = document.createElement('canvas');
                     let width = img.width;
                     let height = img.height;
-                    const maxDim = 1000;
+                    const maxDim = 800;
 
                     if (width > maxDim || height > maxDim) {
                         if (width > height) {
@@ -371,8 +374,8 @@
 
             const submitBtn = document.getElementById('submitBtn');
             if (submitBtn) {
-                submitBtn.innerHTML = `<i class="fa-solid fa-check text-xl"></i> 수정 완료`;
-                submitBtn.className = "flex-[2] py-3.5 px-4 rounded-xl bg-amber-500 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-amber-200 shadow-lg hover:bg-amber-600 active:scale-95 transition-all";
+                submitBtn.innerHTML = `<i class="fa-solid fa-check text-lg"></i> 수정 완료`;
+                submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-amber-500 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-amber-100 shadow-md hover:bg-amber-600 active:scale-95 transition-all";
             }
 
             window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -388,8 +391,8 @@
 
             const submitBtn = document.getElementById('submitBtn');
             if (submitBtn) {
-                submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane"></i> 등록하기`;
-                submitBtn.className = "flex-[2] py-3.5 px-4 rounded-xl bg-indigo-600 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-indigo-200 shadow-lg hover:bg-indigo-700 active:scale-95 transition-all";
+                submitBtn.innerHTML = `<i class="fa-solid fa-paper-plane text-xs"></i> 등록하기`;
+                submitBtn.className = "flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all";
             }
         }
 
@@ -495,7 +498,7 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력
+        // 일기 리스트 화면 출력 (사진 1/4 크기, 글 우측 side-by-side 배치)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -504,10 +507,10 @@
 
             if (entries.length === 0) {
                 container.innerHTML = `
-                    <div class="text-center py-12 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
-                        <i class="fa-regular fa-folder-open text-4xl mb-3 text-slate-300"></i>
-                        <p class="text-lg font-medium">아직 등록된 일기가 없습니다.</p>
-                        <p class="text-sm text-slate-400 mt-1">오늘의 첫 일기를 남겨보세요!</p>
+                    <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
+                        <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
+                        <p class="text-base font-medium">아직 등록된 일기가 없습니다.</p>
+                        <p class="text-xs text-slate-400 mt-0.5">오늘의 첫 일기를 남겨보세요!</p>
                     </div>
                 `;
                 return;
@@ -515,52 +518,53 @@
 
             entries.forEach(entry => {
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-2xl p-5 border border-slate-200 shadow-sm flex flex-col gap-3 hover:shadow-md transition-shadow';
+                card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow';
 
                 const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
 
                 let tagsHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
-                    tagsHTML = `<div class="flex flex-wrap gap-1.5 mt-1">` +
-                        entry.tags.map(t => `<span class="px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-600 text-xs font-semibold">${t}</span>`).join('') +
+                    tagsHTML = `<div class="flex flex-wrap gap-1">` +
+                        entry.tags.map(t => `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">${t}</span>`).join('') +
                         `</div>`;
                 }
 
-                let imageHTML = '';
-                if (entry.imageUrl) {
-                    imageHTML = `
-                        <div class="mt-2 rounded-xl overflow-hidden border border-slate-100 bg-slate-50 flex items-center justify-center">
-                            <img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-auto object-cover max-h-80">
+                let contentBodyHTML = `
+                    <div class="flex gap-3 items-start">
+                        <div class="flex-1">
+                            <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
                         </div>
-                    `;
-                }
+                        ${entry.imageUrl ? `
+                            <div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                                <img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-full object-cover">
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
 
                 card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
                         <div class="flex items-center gap-2">
-                            <span class="w-9 h-9 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-lg font-bold border ${author.border}">
+                            <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border}">
                                 <i class="fa-solid ${author.icon}"></i>
                             </span>
                             <div>
-                                <span class="font-bold text-slate-800 text-base">${author.name}</span>
-                                <span class="text-xs text-slate-400 block">${entry.dateTimeStr || ''}</span>
+                                <span class="font-bold text-slate-800 text-sm">${author.name}</span>
+                                <span class="text-[11px] text-slate-400 block">${entry.dateTimeStr || ''}</span>
                             </div>
                         </div>
-                        <div class="flex items-center gap-1">
-                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-2 transition-colors" title="수정">
-                                <i class="fa-solid fa-pen text-lg"></i>
+                        <div class="flex items-center gap-0.5">
+                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
+                                <i class="fa-solid fa-pen text-xs"></i>
                             </button>
-                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-2 transition-colors" title="삭제">
-                                <i class="fa-solid fa-trash-can text-lg"></i>
+                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
                             </button>
                         </div>
                     </div>
 
                     ${tagsHTML}
-
-                    <p class="text-slate-700 text-lg font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
-
-                    ${imageHTML}
+                    ${contentBodyHTML}
                 `;
 
                 container.appendChild(card);
@@ -608,41 +612,43 @@
     <div class="max-w-md mx-auto min-h-screen bg-slate-50 flex flex-col shadow-lg border-x border-slate-200">
         
         <!-- Header -->
-        <header class="bg-white p-4 border-b border-slate-200 sticky top-0 z-10 shadow-sm flex items-center justify-between">
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-2xl bg-indigo-600 flex items-center justify-center text-white shadow-indigo-200 shadow-md">
-                    <i class="fa-solid fa-book-open text-xl"></i>
+        <header class="bg-white px-3.5 py-2.5 border-b border-slate-200 sticky top-0 z-10 shadow-sm flex items-center justify-between">
+            <div class="flex items-center gap-2.5">
+                <div class="w-8 h-8 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-indigo-100 shadow-sm">
+                    <i class="fa-solid fa-book-open text-sm"></i>
                 </div>
                 <div>
-                    <h1 class="font-bold text-xl text-slate-800 tracking-tight leading-none">서둥이네 한줄 일기장</h1>
-                    <div class="flex items-center gap-2 mt-1">
-                        <p class="text-xs text-slate-400">우리 가족 하루 기록하기</p>
-                        <button id="notifToggleBtn" class="text-xs font-bold text-amber-600 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full flex items-center gap-1">
-                            <i class="fa-solid fa-bell"></i> 알림 권한
-                        </button>
-                    </div>
+                    <h1 class="font-bold text-base text-slate-800 tracking-tight leading-none">서둥이네 한줄 일기장</h1>
+                    <p class="text-[11px] text-slate-400 mt-0.5">우리 가족 하루 기록하기</p>
                 </div>
             </div>
-            <div id="cloudStatusBadge" class="bg-slate-100 text-slate-600 px-3 py-1 rounded-full text-xs font-bold flex items-center gap-1.5">
-                <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span> 연결 확인 중
+
+            <!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
+            <div class="flex items-center gap-1.5">
+                <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
+                    <i class="fa-solid fa-bell-slash text-xs"></i>
+                </button>
+                <div id="cloudStatusBadge" class="w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm" title="연결 확인 중">
+                    <span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>
+                </div>
             </div>
         </header>
 
         <!-- Main Body -->
-        <main class="flex-1 p-4 flex flex-col gap-4">
+        <main class="flex-1 p-2.5 flex flex-col gap-2.5">
             
             <!-- 작성자 선택 -->
-            <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm">
-                <label class="block text-sm font-bold text-slate-500 mb-2 flex items-center gap-1.5">
+            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm">
+                <label class="block text-xs font-bold text-slate-500 mb-1.5 flex items-center gap-1">
                     <i class="fa-solid fa-user-tag text-indigo-500"></i> 작성자 선택
                 </label>
-                <div id="authorSelector" class="flex gap-2"></div>
+                <div id="authorSelector" class="flex gap-1.5"></div>
             </section>
 
             <!-- 일시 및 날씨 -->
-            <section class="bg-white p-3.5 rounded-2xl border border-slate-200 shadow-sm flex items-center justify-between text-sm font-semibold text-slate-600">
-                <div class="flex items-center gap-2 text-base">
-                    <i class="fa-regular fa-calendar-days text-indigo-500 text-lg"></i>
+            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between text-xs font-semibold text-slate-600">
+                <div class="flex items-center gap-1.5 text-sm">
+                    <i class="fa-regular fa-calendar-days text-indigo-500 text-base"></i>
                     <span id="currentDateTime">2026.11.08(일) 00:00</span>
                 </div>
                 <div id="weatherInfo" class="flex items-center gap-1 text-slate-600">
@@ -651,63 +657,63 @@
             </section>
 
             <!-- 기분 & 활동 콤보박스 -->
-            <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3">
-                <label class="block text-sm font-bold text-slate-500 flex items-center gap-1.5">
-                    <i class="fa-solid fa-face-smile text-amber-500 text-base"></i> 기분 & 활동 선택
+            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
+                    <i class="fa-solid fa-face-smile text-amber-500"></i> 기분 & 활동 선택
                 </label>
-                <select id="tagComboSelect" onchange="handleTagSelect(event)" class="w-full p-3.5 rounded-xl border border-slate-300 text-slate-700 bg-slate-50 font-medium text-base focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
-                <div id="selectedTagsContainer" class="flex flex-wrap gap-2 min-h-[32px] items-center"></div>
+                <select id="tagComboSelect" onchange="handleTagSelect(event)" class="w-full p-2.5 rounded-lg border border-slate-300 text-slate-700 bg-slate-50 font-medium text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"></select>
+                <div id="selectedTagsContainer" class="flex flex-wrap gap-1.5 min-h-[24px] items-center"></div>
             </section>
 
             <!-- 일기 입력 & 사진 첨부 -->
-            <section class="bg-white p-4 rounded-2xl border border-slate-200 shadow-sm flex flex-col gap-3">
+            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
                 <div class="flex items-center justify-between">
-                    <label class="block text-sm font-bold text-slate-500 flex items-center gap-1.5">
+                    <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
                         <i class="fa-solid fa-pen-to-square text-indigo-500"></i> 오늘 일기쓰기
                     </label>
-                    <span class="text-xs text-indigo-500 font-bold">* 하루 한 장 사진 첨부 가능</span>
+                    <span class="text-[11px] text-indigo-500 font-bold">* 하루 한 장 사진 첨부</span>
                 </div>
                 
-                <textarea id="journalContent" rows="4" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-3.5 rounded-xl border border-slate-200 text-slate-800 text-lg placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
+                <textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
 
-                <!-- 사진 미리보기 -->
-                <div id="photoPreviewContainer" class="relative hidden rounded-xl overflow-hidden border border-slate-200 bg-slate-50">
-                    <img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full max-h-56 object-cover">
-                    <button type="button" onclick="removePhoto()" class="absolute top-2 right-2 w-8 h-8 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
-                        <i class="fa-solid fa-xmark"></i>
+                <!-- 사진 미리보기 (썸네일 크기) -->
+                <div id="photoPreviewContainer" class="relative hidden w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                    <img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full h-full object-cover">
+                    <button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
+                        <i class="fa-solid fa-xmark text-[10px]"></i>
                     </button>
                 </div>
 
                 <!-- 하단 버튼들 -->
-                <div class="flex items-center gap-2 pt-1">
-                    <label for="photoInput" class="flex-1 py-3 px-3 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-base flex items-center justify-center gap-2 cursor-pointer hover:bg-slate-100 transition-colors">
-                        <i class="fa-solid fa-camera text-indigo-500 text-lg"></i> 사진 첨부
+                <div class="flex items-center gap-1.5 pt-0.5">
+                    <label for="photoInput" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 첨부
                     </label>
                     <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
 
-                    <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-3.5 px-4 rounded-xl bg-indigo-600 text-white font-bold text-lg flex items-center justify-center gap-2 shadow-indigo-200 shadow-lg hover:bg-indigo-700 active:scale-95 transition-all">
-                        <i class="fa-solid fa-paper-plane"></i> 등록하기
+                    <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
+                        <i class="fa-solid fa-paper-plane text-xs"></i> 등록하기
                     </button>
                 </div>
             </section>
 
             <!-- 백업/불러오기 -->
-            <section class="flex gap-2">
-                <button type="button" onclick="downloadBackup()" class="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 font-semibold text-sm flex items-center justify-center gap-1.5 hover:bg-slate-50">
+            <section class="flex gap-1.5">
+                <button type="button" onclick="downloadBackup()" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50">
                     <i class="fa-solid fa-download text-indigo-500"></i> 백업 받기
                 </button>
-                <label for="backupInput" class="flex-1 py-2.5 rounded-xl border border-slate-200 bg-white text-slate-600 font-semibold text-sm flex items-center justify-center gap-1.5 hover:bg-slate-50 cursor-pointer">
+                <label for="backupInput" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer">
                     <i class="fa-solid fa-upload text-indigo-500"></i> 불러오기
                 </label>
                 <input type="file" id="backupInput" accept=".json" onchange="uploadBackup(event)" class="hidden">
             </section>
 
             <!-- 일기 리스트 -->
-            <section class="flex flex-col gap-3 mt-2">
-                <h2 class="text-sm font-bold text-slate-500 flex items-center gap-1.5 px-1">
+            <section class="flex flex-col gap-2 mt-1">
+                <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1 px-1">
                     <i class="fa-solid fa-list-ul text-indigo-500"></i> 우리 가족 일기 목록
                 </h2>
-                <div id="entriesContainer" class="flex flex-col gap-3"></div>
+                <div id="entriesContainer" class="flex flex-col gap-2"></div>
             </section>
         </main>
     </div>
