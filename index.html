@@ -103,6 +103,7 @@
             initDate();
             initAuthorUI();
             loadDiaries();
+            setInterval(loadDiaries, 5000); // 5초마다 자동 새로고침(실시간 동기화)
         });
 
         function initDate() {
