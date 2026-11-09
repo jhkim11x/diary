@@ -49,8 +49,7 @@
         let currentPhotoBase64 = null;
         let editingEntryId = null;
         let currentWeatherText = '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
-        let selectedFilterDate = null;
-        let searchQuery = ''; // 키워드 검색어 변수 추가
+        let searchQuery = '';
 
         // -------------------------------------------------------------
         // 초기화 함수
@@ -525,30 +524,22 @@
         }
 
         // -------------------------------------------------------------
-        // 필터링 및 키워드 검색 처리
+        // 자유 키워드 검색 처리 (날짜 없이도 검색 가능)
         // -------------------------------------------------------------
-        function handleDateFilter(event) {
-            selectedFilterDate = event.target.value;
-            renderEntries();
-        }
-
         function handleSearchInput(event) {
             searchQuery = event.target.value.trim().toLowerCase();
             renderEntries();
         }
 
-        function clearDateFilter() {
-            selectedFilterDate = null;
+        function clearSearch() {
             searchQuery = '';
-            const picker = document.getElementById('datePickerInput');
             const searchInput = document.getElementById('searchInput');
-            if (picker) picker.value = '';
             if (searchInput) searchInput.value = '';
             renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (검색 기능 적용)
+        // 일기 리스트 화면 출력
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -557,19 +548,7 @@
 
             let displayEntries = [...entries];
 
-            // 1. 날짜 필터 적용
-            if (selectedFilterDate) {
-                displayEntries = displayEntries.filter(e => {
-                    const entryDate = new Date(e.timestamp);
-                    const yyyy = entryDate.getFullYear();
-                    const mm = String(entryDate.getMonth() + 1).padStart(2, '0');
-                    const dd = String(entryDate.getDate()).padStart(2, '0');
-                    const formatted = `${yyyy}-${mm}-${dd}`;
-                    return formatted === selectedFilterDate;
-                });
-            }
-
-            // 2. 키워드 검색어 필터 적용 (내용, 작성자, 날짜/시간, 날씨, 태그 검색)
+            // 키워드 검색어 필터링 (일기 내용, 작성자, 날짜/시간, 날씨, 태그 검색)
             if (searchQuery) {
                 displayEntries = displayEntries.filter(e => {
                     const contentMatch = (e.content || '').toLowerCase().includes(searchQuery);
@@ -579,22 +558,20 @@
                     const weatherMatch = (e.weatherHtml || e.weather || '').toLowerCase().includes(searchQuery);
                     return contentMatch || authorMatch || dateMatch || tagMatch || weatherMatch;
                 });
-            }
-
-            // 검색어나 날짜 검색이 없는 일반 화면에서는 최근 10개만 표시
-            if (!selectedFilterDate && !searchQuery) {
+            } else {
+                // 일반 상태 시에는 최근 10개만 표시
                 displayEntries = displayEntries.slice(0, 10);
             }
 
             if (displayEntries.length === 0) {
-                const emptyMsg = (selectedFilterDate || searchQuery) 
-                    ? '검색 결과와 일치하는 일기가 없습니다.' 
+                const emptyMsg = searchQuery 
+                    ? `'${searchQuery}' 검색 결과와 일치하는 일기가 없습니다.` 
                     : '아직 등록된 일기가 없습니다.';
                 container.innerHTML = `
                     <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
                         <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
                         <p class="text-base font-medium">${emptyMsg}</p>
-                        <p class="text-xs text-slate-400 mt-0.5">다른 검색어나 날짜를 선택해 보세요!</p>
+                        <p class="text-xs text-slate-400 mt-0.5">${searchQuery ? '다른 키워드로 검색해 보세요!' : '오늘의 일기를 새로 남겨보세요!'}</p>
                     </div>
                 `;
                 return;
@@ -783,7 +760,7 @@
                 </div>
             </section>
 
-            <!-- 일기 목록 및 키워드/달력 검색 헤더 -->
+            <!-- 일기 목록 및 통합 검색 바 -->
             <section class="flex flex-col gap-2">
                 <div class="flex items-center justify-between px-1">
                     <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1">
@@ -791,19 +768,15 @@
                         <span class="text-[10px] text-slate-400 font-normal">(최근 10개)</span>
                     </h2>
                     
-                    <button type="button" onclick="clearDateFilter()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
+                    <button type="button" onclick="clearSearch()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
                 </div>
 
-                <!-- 키워드 검색 및 날짜 선택 필터 바 -->
-                <div class="flex items-center gap-1.5 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-                    <!-- 키워드 검색 입력창 -->
-                    <div class="relative flex-1">
-                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="내용, 작성자 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-7 pr-2 py-1.5 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500">
+                <!-- 넓어진 키워드 전용 검색 바 (날짜 선택기 제거됨) -->
+                <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                    <div class="relative w-full">
+                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="일기 내용, 작성자, 날짜, 태그로 자유롭게 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-8 pr-3 py-2 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
-
-                    <!-- 날짜선택 달력 -->
-                    <input type="date" id="datePickerInput" onchange="handleDateFilter(event)" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer shrink-0">
                 </div>
 
                 <!-- 일기 목록 컨테이너 -->
