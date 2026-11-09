@@ -91,7 +91,7 @@
                 if (window.isCloudMode) {
                     statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>`;
-                    statusBadge.title = "실시간 공유 중 (알림 활성화)";
+                    statusBadge.title = "실시간 공유 중";
                 } else {
                     statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>`;
@@ -107,7 +107,7 @@
             initTagComboSelect();
             renderSelectedTags();
             loadEntries();
-            subscribeRealtimeChanges(); // 실시간 알림 구독 시작
+            subscribeRealtimeChanges();
         }
 
         // -------------------------------------------------------------
@@ -221,7 +221,7 @@
         }
 
         // -------------------------------------------------------------
-        // 웹 푸시 알림 권한 및 실시간 수신 처리
+        // 웹 푸시 알림
         // -------------------------------------------------------------
         function requestNotificationPermission() {
             if ("Notification" in window) {
@@ -239,55 +239,38 @@
             if (permission === "granted") {
                 btn.className = "w-7 h-7 rounded-full text-emerald-600 bg-emerald-50 border border-emerald-200 flex items-center justify-center hover:bg-emerald-100 transition-colors";
                 btn.innerHTML = `<i class="fa-solid fa-bell text-xs"></i>`;
-                btn.title = "알림 켜짐 (정상)";
+                btn.title = "알림 켜짐";
             } else {
                 btn.className = "w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors cursor-pointer";
                 btn.innerHTML = `<i class="fa-solid fa-bell-slash text-xs"></i>`;
-                btn.title = "알림 끄기 상태 (클릭하여 켜기)";
+                btn.title = "알림 켜기";
                 btn.onclick = () => {
                     Notification.requestPermission().then(p => updateNotificationBadge(p));
                 };
             }
         }
 
-        // 핸드폰 상단에 푸시 알림 배너를 띄워주는 핵심 함수
-        function showPushNotification(authorName, textContent) {
+        function sendWebPushNotification(authorName, textContent) {
             if ("Notification" in window && Notification.permission === "granted") {
-                const title = `📝 서둥이네 새 일기 도착!`;
+                const title = `📝 서둥이네 일기장 새 소식!`;
                 const options = {
-                    body: `${authorName}님이 새 일기를 남겼어요:\n"${textContent.slice(0, 45)}..."`,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png',
-                    tag: 'seodung_journal_alert'
+                    body: `${authorName}님이 새 일기를 등록했어요:\n"${textContent.slice(0, 40)}..."`,
+                    icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png'
                 };
-                try {
-                    // 모바일 브라우저 표준 알림 발송
-                    if (navigator.serviceWorker && navigator.serviceWorker.controller) {
-                        navigator.serviceWorker.ready.then(reg => {
-                            reg.showNotification(title, options);
-                        });
-                    } else {
-                        new Notification(title, options);
-                    }
-                } catch (e) {
-                    console.log("알림 발송 에러:", e);
-                }
+                try { new Notification(title, options); } catch (e) {}
             }
         }
 
-        // Supabase 실시간 감지 (다른 가족이 글을 쓰면 내 핸드폰으로 알림 팝업 전송)
         function subscribeRealtimeChanges() {
             if (window.isCloudMode && supabaseClient) {
                 supabaseClient
-                    .channel('public:journal_entries_notification')
+                    .channel('public:journal_entries')
                     .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'journal_entries' }, payload => {
                         const newEntry = payload.new;
-                        if (newEntry && newEntry.author) {
-                            const writerName = newEntry.author.name || '가족';
-                            const currentDeviceUser = AUTHORS.find(a => a.id === selectedAuthor)?.name || '';
-
-                            // 내가 쓴 글이 아닐 때만 다른 가족들에게 알림 발송!
-                            if (writerName !== currentDeviceUser) {
-                                showPushNotification(writerName, newEntry.content || '');
+                        if (newEntry) {
+                            const authorName = newEntry.author ? newEntry.author.name : '가족';
+                            if (authorName !== (AUTHORS.find(a => a.id === selectedAuthor)?.name)) {
+                                sendWebPushNotification(authorName, newEntry.content || '');
                             }
                             loadEntries();
                         }
@@ -540,6 +523,9 @@
             renderEntries();
         }
 
+        // -------------------------------------------------------------
+        // 자유 키워드 검색 처리 (날짜 없이도 검색 가능)
+        // -------------------------------------------------------------
         function handleSearchInput(event) {
             searchQuery = event.target.value.trim().toLowerCase();
             renderEntries();
@@ -562,6 +548,7 @@
 
             let displayEntries = [...entries];
 
+            // 키워드 검색어 필터링 (일기 내용, 작성자, 날짜/시간, 날씨, 태그 검색)
             if (searchQuery) {
                 displayEntries = displayEntries.filter(e => {
                     const contentMatch = (e.content || '').toLowerCase().includes(searchQuery);
@@ -572,6 +559,7 @@
                     return contentMatch || authorMatch || dateMatch || tagMatch || weatherMatch;
                 });
             } else {
+                // 일반 상태 시에는 최근 10개만 표시
                 displayEntries = displayEntries.slice(0, 10);
             }
 
@@ -783,11 +771,11 @@
                     <button type="button" onclick="clearSearch()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
                 </div>
 
-                <!-- 키워드 전용 검색 바 -->
+                <!-- 넓어진 키워드 전용 검색 바 (날짜 선택기 제거됨) -->
                 <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
                     <div class="relative w-full">
                         <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="일기 내용, 작성자, 태그로 자유롭게 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-8 pr-3 py-2 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="일기 내용, 작성자, 날짜, 태그로 자유롭게 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-8 pr-3 py-2 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
                     </div>
                 </div>
 
