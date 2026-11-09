@@ -38,18 +38,16 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
-        const ALL_TAGS = [
-            '행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏',
-            '가족 나들이 🚗', '맛있는 식사 🍕', '운동 🏃', '산책 🚶', '영화감상 🎬', 'TV시청 📺', '휴식 ☕', '쇼핑 🛍️', '공부 📝', '독서 📚'
+        const TAG_CATEGORIES = [
+            { label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
+            { label: '⚽ 활동 선택', tags: ['가족 나들이 🚗', '맛있는 식사 🍕', '운동/산책 🏃', '영화/TV 🎬', '휴식 ☕', '쇼핑 🛍️', '공부/독서 📚'] }
         ];
 
         let entries = [];
-        let selectedAuthor = localStorage.getItem('seodung_last_author') || '엄마';
+        let selectedAuthor = '아빠';
         let selectedTags = [];
         let currentPhotoBase64 = null;
         let editingEntryId = null;
-        let currentWeatherText = '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
-        let searchQuery = '';
 
         // -------------------------------------------------------------
         // 초기화 함수
@@ -105,7 +103,6 @@
 
             initAuthorSelector();
             initTagComboSelect();
-            renderSelectedTags();
             loadEntries();
             subscribeRealtimeChanges();
         }
@@ -138,18 +135,16 @@
                 if (data && data.current_weather) {
                     const temp = Math.round(data.current_weather.temperature);
                     const code = data.current_weather.weathercode;
-                    let iconHtml = '<i class="fa-solid fa-sun text-amber-500"></i>';
+                    let icon = 'fa-sun text-amber-500';
                     let text = '맑음';
-                    if (code > 0 && code <= 3) { iconHtml = '<i class="fa-solid fa-cloud-sun text-slate-400"></i>'; text = '구름조금'; }
-                    else if (code > 3 && code < 60) { iconHtml = '<i class="fa-solid fa-cloud text-slate-500"></i>'; text = '흐림'; }
-                    else if (code >= 60) { iconHtml = '<i class="fa-solid fa-umbrella text-blue-500"></i>'; text = '비'; }
+                    if (code > 0 && code <= 3) { icon = 'fa-cloud-sun text-slate-400'; text = '구름조금'; }
+                    else if (code > 3 && code < 60) { icon = 'fa-cloud text-slate-500'; text = '흐림'; }
+                    else if (code >= 60) { icon = 'fa-umbrella text-blue-500'; text = '비'; }
 
-                    currentWeatherText = `${iconHtml} <span>${text} ${temp}°C</span>`;
-                    weatherEl.innerHTML = currentWeatherText;
+                    weatherEl.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${text} ${temp}°C</span>`;
                 }
             } catch (e) {
-                currentWeatherText = '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
-                weatherEl.innerHTML = currentWeatherText;
+                weatherEl.innerHTML = `<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>`;
             }
         }
 
@@ -173,9 +168,7 @@
                 btn.innerHTML = `<i class="fa-solid ${author.icon}"></i> ${author.name}`;
                 btn.onclick = () => {
                     selectedAuthor = author.id;
-                    localStorage.setItem('seodung_last_author', selectedAuthor);
                     initAuthorSelector();
-                    renderEntries();
                 };
                 container.appendChild(btn);
             });
@@ -184,15 +177,19 @@
         function initTagComboSelect() {
             const select = document.getElementById('tagComboSelect');
             if (!select) return;
-            select.innerHTML = '';
+            select.innerHTML = '<option value="">-- 기분 또는 활동을 선택하세요 --</option>';
 
-            ALL_TAGS.forEach(tag => {
-                const opt = document.createElement('option');
-                opt.value = tag;
-                opt.textContent = tag;
-                select.appendChild(opt);
+            TAG_CATEGORIES.forEach(cat => {
+                const group = document.createElement('optgroup');
+                group.label = cat.label;
+                cat.tags.forEach(tag => {
+                    const opt = document.createElement('option');
+                    opt.value = tag;
+                    opt.textContent = tag;
+                    group.appendChild(opt);
+                });
+                select.appendChild(group);
             });
-            select.selectedIndex = 0;
         }
 
         function handleTagSelect(event) {
@@ -201,6 +198,7 @@
                 selectedTags.push(val);
                 renderSelectedTags();
             }
+            event.target.value = '';
         }
 
         function removeTag(tagToRemove) {
@@ -362,12 +360,6 @@
             const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
             if (!entry) return;
 
-            const entryAuthorId = entry.author ? entry.author.id : '아빠';
-            if (entryAuthorId !== selectedAuthor) {
-                alert(`이 일기는 [${entryAuthorId}]님만 수정할 수 있습니다.`);
-                return;
-            }
-
             editingEntryId = id || timestamp;
             selectedAuthor = entry.author ? entry.author.id : '아빠';
             selectedTags = entry.tags ? [...entry.tags] : [];
@@ -458,7 +450,6 @@
                 timestamp: Date.now(),
                 author: authorObj,
                 dateTimeStr: dtText,
-                weatherHtml: currentWeatherText, 
                 tags: [...selectedTags],
                 content: content,
                 imageUrl: currentPhotoBase64
@@ -496,15 +487,6 @@
         }
 
         async function deleteEntry(id, timestamp) {
-            const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
-            if (!entry) return;
-
-            const entryAuthorId = entry.author ? entry.author.id : '아빠';
-            if (entryAuthorId !== selectedAuthor) {
-                alert(`이 일기는 [${entryAuthorId}]님만 삭제할 수 있습니다.`);
-                return;
-            }
-
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
 
             if (window.isCloudMode && supabaseClient && id) {
@@ -524,88 +506,39 @@
         }
 
         // -------------------------------------------------------------
-        // 자유 키워드 검색 처리 (날짜 없이도 검색 가능)
-        // -------------------------------------------------------------
-        function handleSearchInput(event) {
-            searchQuery = event.target.value.trim().toLowerCase();
-            renderEntries();
-        }
-
-        function clearSearch() {
-            searchQuery = '';
-            const searchInput = document.getElementById('searchInput');
-            if (searchInput) searchInput.value = '';
-            renderEntries();
-        }
-
-        // -------------------------------------------------------------
-        // 일기 리스트 화면 출력
+        // 일기 리스트 화면 출력 (사진 1/4 크기, 글 우측 side-by-side 배치)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
             if (!container) return;
             container.innerHTML = '';
 
-            let displayEntries = [...entries];
-
-            // 키워드 검색어 필터링 (일기 내용, 작성자, 날짜/시간, 날씨, 태그 검색)
-            if (searchQuery) {
-                displayEntries = displayEntries.filter(e => {
-                    const contentMatch = (e.content || '').toLowerCase().includes(searchQuery);
-                    const authorMatch = (e.author?.name || '').toLowerCase().includes(searchQuery);
-                    const dateMatch = (e.dateTimeStr || '').toLowerCase().includes(searchQuery);
-                    const tagMatch = e.tags && e.tags.some(t => t.toLowerCase().includes(searchQuery));
-                    const weatherMatch = (e.weatherHtml || e.weather || '').toLowerCase().includes(searchQuery);
-                    return contentMatch || authorMatch || dateMatch || tagMatch || weatherMatch;
-                });
-            } else {
-                // 일반 상태 시에는 최근 10개만 표시
-                displayEntries = displayEntries.slice(0, 10);
-            }
-
-            if (displayEntries.length === 0) {
-                const emptyMsg = searchQuery 
-                    ? `'${searchQuery}' 검색 결과와 일치하는 일기가 없습니다.` 
-                    : '아직 등록된 일기가 없습니다.';
+            if (entries.length === 0) {
                 container.innerHTML = `
                     <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
                         <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
-                        <p class="text-base font-medium">${emptyMsg}</p>
-                        <p class="text-xs text-slate-400 mt-0.5">${searchQuery ? '다른 키워드로 검색해 보세요!' : '오늘의 일기를 새로 남겨보세요!'}</p>
+                        <p class="text-base font-medium">아직 등록된 일기가 없습니다.</p>
+                        <p class="text-xs text-slate-400 mt-0.5">오늘의 첫 일기를 남겨보세요!</p>
                     </div>
                 `;
                 return;
             }
 
-            displayEntries.forEach(entry => {
+            entries.forEach(entry => {
                 const card = document.createElement('div');
                 card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow';
 
-                const author = entry.author || { id: '아빠', name: '아빠', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
+                const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
 
-                const isMyEntry = author.id === selectedAuthor;
-                const actionButtons = isMyEntry ? `
-                    <div class="flex items-center gap-0.5 shrink-0">
-                        <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
-                            <i class="fa-solid fa-pen text-xs"></i>
-                        </button>
-                        <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
-                            <i class="fa-solid fa-trash-can text-xs"></i>
-                        </button>
-                    </div>
-                ` : '';
-
-                let authorTagsBadge = '';
+                let tagsHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
-                    authorTagsBadge = `<div class="flex items-center gap-1 overflow-x-auto">` +
-                        entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-100 shrink-0">${t}</span>`).join('') +
+                    tagsHTML = `<div class="flex flex-wrap gap-1">` +
+                        entry.tags.map(t => `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">${t}</span>`).join('') +
                         `</div>`;
                 }
 
-                const weatherDisplay = entry.weatherHtml || entry.weather || '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
-
                 let contentBodyHTML = `
-                    <div class="flex gap-3 items-start mt-1">
+                    <div class="flex gap-3 items-start">
                         <div class="flex-1">
                             <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
                         </div>
@@ -618,28 +551,30 @@
                 `;
 
                 card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2 gap-2">
-                        <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
-                            <div class="flex items-center gap-1.5 shrink-0">
-                                <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border} shrink-0">
-                                    <i class="fa-solid ${author.icon}"></i>
-                                </span>
-                                <span class="font-bold text-slate-800 text-sm shrink-0">${author.name}</span>
-                            </div>
-                            
-                            ${authorTagsBadge}
-
-                            <div class="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium shrink-0">
-                                <span><i class="fa-regular fa-clock text-slate-400 mr-0.5"></i>${entry.dateTimeStr || ''}</span>
-                                <span class="text-slate-300">•</span>
-                                <div class="flex items-center gap-1">${weatherDisplay}</div>
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
+                        <div class="flex items-center gap-2">
+                            <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border}">
+                                <i class="fa-solid ${author.icon}"></i>
+                            </span>
+                            <div>
+                                <span class="font-bold text-slate-800 text-sm">${author.name}</span>
+                                <span class="text-[11px] text-slate-400 block">${entry.dateTimeStr || ''}</span>
                             </div>
                         </div>
-
-                        ${actionButtons}
+                        <div class="flex items-center gap-0.5">
+                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
+                                <i class="fa-solid fa-pen text-xs"></i>
+                            </button>
+                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
+                                <i class="fa-solid fa-trash-can text-xs"></i>
+                            </button>
+                        </div>
                     </div>
+
+                    ${tagsHTML}
                     ${contentBodyHTML}
                 `;
+
                 container.appendChild(card);
             });
         }
@@ -696,6 +631,7 @@
                 </div>
             </div>
 
+            <!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
             <div class="flex items-center gap-1.5">
                 <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
                     <i class="fa-solid fa-bell-slash text-xs"></i>
@@ -738,21 +674,30 @@
             </section>
 
             <!-- 일기 입력 & 사진 첨부 -->
-            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2.5">
-                <textarea id="journalContent" rows="3" placeholder="오늘 하루는 어땠나요? 한줄 일기를 남겨보세요." class="w-full p-2.5 text-sm rounded-lg border border-slate-200 focus:outline-none focus:ring-2 focus:ring-indigo-500 placeholder-slate-400 resize-none"></textarea>
+            <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
+                <div class="flex items-center justify-between">
+                    <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
+                        <i class="fa-solid fa-pen-to-square text-indigo-500"></i> 오늘 일기쓰기
+                    </label>
+                    <span class="text-[11px] text-indigo-500 font-bold">* 하루 한 장 사진 첨부</span>
+                </div>
+                
+                <textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
 
-                <div id="photoPreviewContainer" class="relative w-20 h-20 hidden">
-                    <img id="photoPreview" src="" alt="미리보기" class="w-full h-full object-cover rounded-lg border border-slate-200">
-                    <button type="button" onclick="removePhoto()" class="absolute -top-1.5 -right-1.5 bg-rose-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs shadow-sm hover:bg-rose-600 transition-colors">
-                        <i class="fa-solid fa-xmark"></i>
+                <!-- 사진 미리보기 (썸네일 크기) -->
+                <div id="photoPreviewContainer" class="relative hidden w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                    <img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full h-full object-cover">
+                    <button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
+                        <i class="fa-solid fa-xmark text-[10px]"></i>
                     </button>
                 </div>
 
-                <div class="flex items-center gap-2">
-                    <label class="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 active:scale-95 transition-all">
+                <!-- 하단 버튼들 -->
+                <div class="flex items-center gap-1.5 pt-0.5">
+                    <label for="photoInput" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
                         <i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 첨부
-                        <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
                     </label>
+                    <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
 
                     <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
                         <i class="fa-solid fa-paper-plane text-xs"></i> 등록하기
@@ -760,43 +705,24 @@
                 </div>
             </section>
 
-            <!-- 일기 목록 및 통합 검색 바 -->
-            <section class="flex flex-col gap-2">
-                <div class="flex items-center justify-between px-1">
-                    <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1">
-                        <i class="fa-solid fa-list-ul text-indigo-500"></i> 일기 목록
-                        <span class="text-[10px] text-slate-400 font-normal">(최근 10개)</span>
-                    </h2>
-                    
-                    <button type="button" onclick="clearSearch()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
-                </div>
-
-                <!-- 넓어진 키워드 전용 검색 바 (날짜 선택기 제거됨) -->
-                <div class="bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
-                    <div class="relative w-full">
-                        <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
-                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="일기 내용, 작성자, 날짜, 태그로 자유롭게 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-8 pr-3 py-2 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500">
-                    </div>
-                </div>
-
-                <!-- 일기 목록 컨테이너 -->
-                <div id="entriesContainer" class="flex flex-col gap-2.5"></div>
+            <!-- 백업/불러오기 -->
+            <section class="flex gap-1.5">
+                <button type="button" onclick="downloadBackup()" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50">
+                    <i class="fa-solid fa-download text-indigo-500"></i> 백업 받기
+                </button>
+                <label for="backupInput" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer">
+                    <i class="fa-solid fa-upload text-indigo-500"></i> 불러오기
+                </label>
+                <input type="file" id="backupInput" accept=".json" onchange="uploadBackup(event)" class="hidden">
             </section>
 
-            <!-- 백업 및 복원 -->
-            <section class="mt-2 p-2.5 bg-slate-100 rounded-xl border border-slate-200/60 flex items-center justify-between text-xs text-slate-500">
-                <span class="font-medium text-[11px]">데이터 백업 & 관리</span>
-                <div class="flex items-center gap-2">
-                    <button onclick="downloadBackup()" class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 active:scale-95 transition-all shadow-sm">
-                        <i class="fa-solid fa-download text-indigo-500"></i> 저장
-                    </button>
-                    <label class="px-2.5 py-1 rounded-lg bg-white border border-slate-200 text-slate-600 font-bold hover:bg-slate-50 active:scale-95 transition-all shadow-sm cursor-pointer">
-                        <i class="fa-solid fa-upload text-emerald-500"></i> 불러오기
-                        <input type="file" accept=".json" onchange="uploadBackup(event)" class="hidden">
-                    </label>
-                </div>
+            <!-- 일기 리스트 -->
+            <section class="flex flex-col gap-2 mt-1">
+                <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1 px-1">
+                    <i class="fa-solid fa-list-ul text-indigo-500"></i> 우리 가족 일기 목록
+                </h2>
+                <div id="entriesContainer" class="flex flex-col gap-2"></div>
             </section>
-
         </main>
     </div>
 </body>
