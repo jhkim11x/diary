@@ -38,21 +38,19 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
-        // 4, 5, 6번 반영: 범주 제목 제거 및 목록 분리 (운동/산책 -> 운동, 산책 / 영화/TV -> 영화감상, TV시청 / 공부/독서 -> 공부, 독서)
         const ALL_TAGS = [
             '행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏',
             '가족 나들이 🚗', '맛있는 식사 🍕', '운동 🏃', '산책 🚶', '영화감상 🎬', 'TV시청 📺', '휴식 ☕', '쇼핑 🛍️', '공부 📝', '독서 📚'
         ];
 
         let entries = [];
-        // 1번 반영: 접속 시 저장된 작성자가 있으면 로드, 없으면 '엄마' 기본값
         let selectedAuthor = localStorage.getItem('seodung_last_author') || '엄마';
-        // 3번 반영: 첫 화면에서 바로 '행복 😊' 태그가 기본 선택 상태가 되도록 설정
-        let selectedTags = ['행복 😊'];
+        let selectedTags = [];
         let currentPhotoBase64 = null;
         let editingEntryId = null;
-        let currentWeatherText = '맑음 20°C';
-        let selectedFilterDate = null; // 8번 반영: 달력 날짜 필터링
+        let currentWeatherText = '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
+        let selectedFilterDate = null;
+        let searchQuery = ''; // 키워드 검색어 변수 추가
 
         // -------------------------------------------------------------
         // 초기화 함수
@@ -141,18 +139,18 @@
                 if (data && data.current_weather) {
                     const temp = Math.round(data.current_weather.temperature);
                     const code = data.current_weather.weathercode;
-                    let icon = 'fa-sun text-amber-500';
+                    let iconHtml = '<i class="fa-solid fa-sun text-amber-500"></i>';
                     let text = '맑음';
-                    if (code > 0 && code <= 3) { icon = 'fa-cloud-sun text-slate-400'; text = '구름조금'; }
-                    else if (code > 3 && code < 60) { icon = 'fa-cloud text-slate-500'; text = '흐림'; }
-                    else if (code >= 60) { icon = 'fa-umbrella text-blue-500'; text = '비'; }
+                    if (code > 0 && code <= 3) { iconHtml = '<i class="fa-solid fa-cloud-sun text-slate-400"></i>'; text = '구름조금'; }
+                    else if (code > 3 && code < 60) { iconHtml = '<i class="fa-solid fa-cloud text-slate-500"></i>'; text = '흐림'; }
+                    else if (code >= 60) { iconHtml = '<i class="fa-solid fa-umbrella text-blue-500"></i>'; text = '비'; }
 
-                    currentWeatherText = `${text} ${temp}°C`;
-                    weatherEl.innerHTML = `<i class="fa-solid ${icon}"></i> <span>${currentWeatherText}</span>`;
+                    currentWeatherText = `${iconHtml} <span>${text} ${temp}°C</span>`;
+                    weatherEl.innerHTML = currentWeatherText;
                 }
             } catch (e) {
-                currentWeatherText = '맑음 20°C';
-                weatherEl.innerHTML = `<i class="fa-solid fa-sun text-amber-500"></i> <span>${currentWeatherText}</span>`;
+                currentWeatherText = '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
+                weatherEl.innerHTML = currentWeatherText;
             }
         }
 
@@ -176,16 +174,14 @@
                 btn.innerHTML = `<i class="fa-solid ${author.icon}"></i> ${author.name}`;
                 btn.onclick = () => {
                     selectedAuthor = author.id;
-                    // 1번 반영: 선택한 작성자 정보 저장
                     localStorage.setItem('seodung_last_author', selectedAuthor);
                     initAuthorSelector();
-                    renderEntries(); // 2번 반영: 작성자 변경 시 수정/삭제 권한 실시간 반영
+                    renderEntries();
                 };
                 container.appendChild(btn);
             });
         }
 
-        // 3, 4번 반영: 기분/활동 선택 타이틀 제거 및 바로 첫 태그 출력
         function initTagComboSelect() {
             const select = document.getElementById('tagComboSelect');
             if (!select) return;
@@ -197,6 +193,7 @@
                 opt.textContent = tag;
                 select.appendChild(opt);
             });
+            select.selectedIndex = 0;
         }
 
         function handleTagSelect(event) {
@@ -366,7 +363,6 @@
             const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
             if (!entry) return;
 
-            // 2번 반영: 일기 쓴 사람 확인
             const entryAuthorId = entry.author ? entry.author.id : '아빠';
             if (entryAuthorId !== selectedAuthor) {
                 alert(`이 일기는 [${entryAuthorId}]님만 수정할 수 있습니다.`);
@@ -406,8 +402,7 @@
             editingEntryId = null;
             const contentInput = document.getElementById('journalContent');
             if (contentInput) contentInput.value = '';
-            // 3번 반영: 취소 시에도 첫 태그 유지
-            selectedTags = ['행복 😊'];
+            selectedTags = [];
             renderSelectedTags();
             removePhoto();
 
@@ -460,12 +455,11 @@
                 return;
             }
 
-            // 9번 반영: 기록 시 당시 weather 기록
             const newEntry = {
                 timestamp: Date.now(),
                 author: authorObj,
                 dateTimeStr: dtText,
-                weather: currentWeatherText, 
+                weatherHtml: currentWeatherText, 
                 tags: [...selectedTags],
                 content: content,
                 imageUrl: currentPhotoBase64
@@ -506,7 +500,6 @@
             const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
             if (!entry) return;
 
-            // 2번 반영: 일기 쓴 사람 확인
             const entryAuthorId = entry.author ? entry.author.id : '아빠';
             if (entryAuthorId !== selectedAuthor) {
                 alert(`이 일기는 [${entryAuthorId}]님만 삭제할 수 있습니다.`);
@@ -531,21 +524,31 @@
             renderEntries();
         }
 
-        // 8번 반영: 날짜 필터링 함수
+        // -------------------------------------------------------------
+        // 필터링 및 키워드 검색 처리
+        // -------------------------------------------------------------
         function handleDateFilter(event) {
             selectedFilterDate = event.target.value;
             renderEntries();
         }
 
+        function handleSearchInput(event) {
+            searchQuery = event.target.value.trim().toLowerCase();
+            renderEntries();
+        }
+
         function clearDateFilter() {
             selectedFilterDate = null;
+            searchQuery = '';
             const picker = document.getElementById('datePickerInput');
+            const searchInput = document.getElementById('searchInput');
             if (picker) picker.value = '';
+            if (searchInput) searchInput.value = '';
             renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력
+        // 일기 리스트 화면 출력 (검색 기능 적용)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -554,7 +557,7 @@
 
             let displayEntries = [...entries];
 
-            // 8번 반영: 날짜 검색 필터링 처리
+            // 1. 날짜 필터 적용
             if (selectedFilterDate) {
                 displayEntries = displayEntries.filter(e => {
                     const entryDate = new Date(e.timestamp);
@@ -564,17 +567,34 @@
                     const formatted = `${yyyy}-${mm}-${dd}`;
                     return formatted === selectedFilterDate;
                 });
-            } else {
-                // 8번 반영: 날짜 필터가 없을 때는 최근 10개만 슬라이스해서 표시
+            }
+
+            // 2. 키워드 검색어 필터 적용 (내용, 작성자, 날짜/시간, 날씨, 태그 검색)
+            if (searchQuery) {
+                displayEntries = displayEntries.filter(e => {
+                    const contentMatch = (e.content || '').toLowerCase().includes(searchQuery);
+                    const authorMatch = (e.author?.name || '').toLowerCase().includes(searchQuery);
+                    const dateMatch = (e.dateTimeStr || '').toLowerCase().includes(searchQuery);
+                    const tagMatch = e.tags && e.tags.some(t => t.toLowerCase().includes(searchQuery));
+                    const weatherMatch = (e.weatherHtml || e.weather || '').toLowerCase().includes(searchQuery);
+                    return contentMatch || authorMatch || dateMatch || tagMatch || weatherMatch;
+                });
+            }
+
+            // 검색어나 날짜 검색이 없는 일반 화면에서는 최근 10개만 표시
+            if (!selectedFilterDate && !searchQuery) {
                 displayEntries = displayEntries.slice(0, 10);
             }
 
             if (displayEntries.length === 0) {
+                const emptyMsg = (selectedFilterDate || searchQuery) 
+                    ? '검색 결과와 일치하는 일기가 없습니다.' 
+                    : '아직 등록된 일기가 없습니다.';
                 container.innerHTML = `
                     <div class="text-center py-8 text-slate-400 bg-white rounded-2xl border border-slate-200 shadow-sm">
                         <i class="fa-regular fa-folder-open text-3xl mb-2 text-slate-300"></i>
-                        <p class="text-base font-medium">${selectedFilterDate ? '선택한 날짜의 일기가 없습니다.' : '아직 등록된 일기가 없습니다.'}</p>
-                        <p class="text-xs text-slate-400 mt-0.5">오늘의 일기를 새로 기록해 보세요!</p>
+                        <p class="text-base font-medium">${emptyMsg}</p>
+                        <p class="text-xs text-slate-400 mt-0.5">다른 검색어나 날짜를 선택해 보세요!</p>
                     </div>
                 `;
                 return;
@@ -586,10 +606,9 @@
 
                 const author = entry.author || { id: '아빠', name: '아빠', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
 
-                // 2번 반영: 내가 쓴 일기인지 여부에 따른 수정/삭제 버튼 노출 결정
                 const isMyEntry = author.id === selectedAuthor;
                 const actionButtons = isMyEntry ? `
-                    <div class="flex items-center gap-0.5">
+                    <div class="flex items-center gap-0.5 shrink-0">
                         <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
                             <i class="fa-solid fa-pen text-xs"></i>
                         </button>
@@ -599,16 +618,14 @@
                     </div>
                 ` : '';
 
-                // 7번 반영: 작성자 옆에 선택한 기분활동 태그 아이콘 노출
                 let authorTagsBadge = '';
                 if (entry.tags && entry.tags.length > 0) {
-                    authorTagsBadge = `<div class="flex items-center gap-1 ml-1 overflow-x-auto">` +
-                        entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-100">${t}</span>`).join('') +
+                    authorTagsBadge = `<div class="flex items-center gap-1 overflow-x-auto">` +
+                        entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-indigo-50 text-indigo-700 text-[11px] font-bold border border-indigo-100 shrink-0">${t}</span>`).join('') +
                         `</div>`;
                 }
 
-                // 9번 반영: 날짜 옆에 작성 당시 날씨 표시
-                const weatherStr = entry.weather ? ` • ☀️ ${entry.weather}` : '';
+                const weatherDisplay = entry.weatherHtml || entry.weather || '<i class="fa-solid fa-sun text-amber-500"></i> <span>맑음 20°C</span>';
 
                 let contentBodyHTML = `
                     <div class="flex gap-3 items-start mt-1">
@@ -624,18 +641,25 @@
                 `;
 
                 card.innerHTML = `
-                    <div class="flex items-center justify-between border-b border-slate-100 pb-2">
-                        <div class="flex items-center gap-1.5 flex-wrap">
-                            <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border} shrink-0">
-                                <i class="fa-solid ${author.icon}"></i>
-                            </span>
-                            <span class="font-bold text-slate-800 text-sm shrink-0">${author.name}</span>
+                    <div class="flex items-center justify-between border-b border-slate-100 pb-2 gap-2">
+                        <div class="flex items-center gap-2 flex-wrap flex-1 min-w-0">
+                            <div class="flex items-center gap-1.5 shrink-0">
+                                <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border} shrink-0">
+                                    <i class="fa-solid ${author.icon}"></i>
+                                </span>
+                                <span class="font-bold text-slate-800 text-sm shrink-0">${author.name}</span>
+                            </div>
+                            
                             ${authorTagsBadge}
+
+                            <div class="flex items-center gap-1.5 text-[11px] text-slate-400 font-medium shrink-0">
+                                <span><i class="fa-regular fa-clock text-slate-400 mr-0.5"></i>${entry.dateTimeStr || ''}</span>
+                                <span class="text-slate-300">•</span>
+                                <div class="flex items-center gap-1">${weatherDisplay}</div>
+                            </div>
                         </div>
+
                         ${actionButtons}
-                    </div>
-                    <div class="text-[11px] text-slate-400">
-                        ${entry.dateTimeStr || ''}${weatherStr}
                     </div>
                     ${contentBodyHTML}
                 `;
@@ -695,7 +719,6 @@
                 </div>
             </div>
 
-            <!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
             <div class="flex items-center gap-1.5">
                 <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
                     <i class="fa-solid fa-bell-slash text-xs"></i>
@@ -760,7 +783,7 @@
                 </div>
             </section>
 
-            <!-- 일기 목록 및 달력 검색 헤더 (8번 반영) -->
+            <!-- 일기 목록 및 키워드/달력 검색 헤더 -->
             <section class="flex flex-col gap-2">
                 <div class="flex items-center justify-between px-1">
                     <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1">
@@ -768,11 +791,19 @@
                         <span class="text-[10px] text-slate-400 font-normal">(최근 10개)</span>
                     </h2>
                     
-                    <!-- 달력 클릭으로 이전 일기 보기 -->
-                    <div class="flex items-center gap-1.5">
-                        <input type="date" id="datePickerInput" onchange="handleDateFilter(event)" class="text-xs border border-slate-200 rounded-lg px-2 py-1 bg-white text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer">
-                        <button type="button" onclick="clearDateFilter()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
+                    <button type="button" onclick="clearDateFilter()" class="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 underline">전체보기</button>
+                </div>
+
+                <!-- 키워드 검색 및 날짜 선택 필터 바 -->
+                <div class="flex items-center gap-1.5 bg-white p-2 rounded-xl border border-slate-200 shadow-sm">
+                    <!-- 키워드 검색 입력창 -->
+                    <div class="relative flex-1">
+                        <i class="fa-solid fa-magnifying-glass absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 text-xs"></i>
+                        <input type="text" id="searchInput" oninput="handleSearchInput(event)" placeholder="내용, 작성자 검색..." class="w-full text-xs border border-slate-200 rounded-lg pl-7 pr-2 py-1.5 bg-slate-50 text-slate-700 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500">
                     </div>
+
+                    <!-- 날짜선택 달력 -->
+                    <input type="date" id="datePickerInput" onchange="handleDateFilter(event)" class="text-xs border border-slate-200 rounded-lg px-2 py-1.5 bg-slate-50 text-slate-600 font-medium focus:outline-none focus:ring-1 focus:ring-indigo-500 shadow-sm cursor-pointer shrink-0">
                 </div>
 
                 <!-- 일기 목록 컨테이너 -->
