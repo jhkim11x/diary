@@ -38,6 +38,7 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
+        // 반응 이모지 목록 (알통 제외, 엄지 위/아래 포함)
         const REACTION_ICONS = ['😊', '👍', '👎', '❤️', '🎉'];
 
         const TAG_CATEGORIES = [
@@ -253,17 +254,6 @@
             }
         }
 
-        function sendWebPushNotification(authorName, textContent) {
-            if ("Notification" in window && Notification.permission === "granted") {
-                const title = `📝 서둥이네 일기장 새 소식!`;
-                const options = {
-                    body: `${authorName}님이 새 일기를 등록했어요:\n"${textContent.slice(0, 40)}..."`,
-                    icon: 'https://cdn-icons-png.flaticon.com/512/3237/3237472.png'
-                };
-                try { new Notification(title, options); } catch (e) {}
-            }
-        }
-
         function subscribeRealtimeChanges() {
             if (window.isCloudMode && supabaseClient) {
                 supabaseClient
@@ -276,7 +266,7 @@
         }
 
         // -------------------------------------------------------------
-        // 이미지 용량 자동 압축
+        // 이미지 압축
         // -------------------------------------------------------------
         function handleImageSelect(event) {
             const file = event.target.files[0];
@@ -329,7 +319,7 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 CRUD (안정성 강화)
+        // 데이터 CRUD
         // -------------------------------------------------------------
         async function loadEntries() {
             if (window.isCloudMode && supabaseClient) {
@@ -339,14 +329,13 @@
                         .select('*')
                         .order('timestamp', { ascending: false });
 
-                    if (!error && data && data.length > 0) {
+                    if (!error && data) {
                         entries = data;
-                        saveToLocalStorage();
                         renderEntries();
                         return;
                     }
                 } catch (err) {
-                    console.warn("Supabase 데이터 로드 에러 (로컬 저장소 불러오기):", err);
+                    console.warn("Supabase 데이터 로드 에러:", err);
                 }
             }
 
@@ -423,8 +412,6 @@
                     targetEntry.content = content;
                     targetEntry.imageUrl = currentPhotoBase64;
 
-                    saveToLocalStorage();
-
                     if (window.isCloudMode && supabaseClient && targetEntry.id) {
                         try {
                             await supabaseClient
@@ -440,6 +427,7 @@
                             console.error("클라우드 수정 실패:", err);
                         }
                     }
+                    saveToLocalStorage();
                 }
                 cancelEdit();
                 renderEntries();
@@ -456,9 +444,6 @@
                 comments: []
             };
 
-            entries.unshift(newEntry);
-            saveToLocalStorage();
-
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -466,13 +451,20 @@
                         .insert([newEntry])
                         .select();
 
-                    if (!error && data && data[0]) {
-                        entries[0] = data[0];
-                        saveToLocalStorage();
+                    if (error) throw error;
+                    if (data && data[0]) {
+                        entries.unshift(data[0]);
+                    } else {
+                        entries.unshift(newEntry);
                     }
                 } catch (err) {
-                    console.error("클라우드 저장 실패 (로컬 저장은 완료됨):", err);
+                    console.error("클라우드 저장 실패:", err);
+                    entries.unshift(newEntry);
+                    saveToLocalStorage();
                 }
+            } else {
+                entries.unshift(newEntry);
+                saveToLocalStorage();
             }
 
             cancelEdit();
@@ -486,10 +478,6 @@
         async function deleteEntry(id, timestamp) {
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
 
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
-            saveToLocalStorage();
-            renderEntries();
-
             if (window.isCloudMode && supabaseClient && id) {
                 try {
                     await supabaseClient
@@ -500,10 +488,14 @@
                     console.error("클라우드 삭제 실패:", err);
                 }
             }
+
+            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
+            saveToLocalStorage();
+            renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 댓글 & 이모지 반응 관련 함수
+        // 댓글 및 반응 함수
         // -------------------------------------------------------------
         function toggleCommentInput(entryIdKey) {
             openCommentBoxes[entryIdKey] = !openCommentBoxes[entryIdKey];
@@ -549,9 +541,6 @@
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
-            saveToLocalStorage();
-            renderEntries();
-
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
                     await supabaseClient
@@ -562,6 +551,8 @@
                     console.error("댓글 동기화 실패:", err);
                 }
             }
+            saveToLocalStorage();
+            renderEntries();
         }
 
         async function deleteComment(entryId, timestamp, commentId) {
@@ -569,9 +560,6 @@
             if (!targetEntry || !targetEntry.comments) return;
 
             targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
-
-            saveToLocalStorage();
-            renderEntries();
 
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
@@ -583,6 +571,8 @@
                     console.error("댓글 삭제 실패:", err);
                 }
             }
+            saveToLocalStorage();
+            renderEntries();
         }
 
         // -------------------------------------------------------------
@@ -612,6 +602,7 @@
                 const entryKey = entry.id || entry.timestamp;
                 const isInputOpen = openCommentBoxes[entryKey] || false;
 
+                // 글쓴이 옆 태그 출력
                 let tagsInlineHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
                     tagsInlineHTML = entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">${t}</span>`).join(' ');
@@ -630,6 +621,7 @@
                     </div>
                 `;
 
+                // 댓글 상시 표시
                 let commentsHTML = '';
                 if (entry.comments && entry.comments.length > 0) {
                     commentsHTML = `
@@ -724,42 +716,6 @@
                 modal.classList.remove('flex');
             }
         }
-
-        // -------------------------------------------------------------
-        // 백업 & 데이터 파일 불러오기
-        // -------------------------------------------------------------
-        function downloadBackup() {
-            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(entries, null, 2));
-            const downloadAnchor = document.createElement('a');
-            downloadAnchor.setAttribute("href", dataStr);
-            downloadAnchor.setAttribute("download", `서둥이네_일기장_백업_${new Date().toISOString().slice(0,10)}.json`);
-            document.body.appendChild(downloadAnchor);
-            downloadAnchor.click();
-            downloadAnchor.remove();
-        }
-
-        function uploadBackup(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                try {
-                    const importedEntries = JSON.parse(e.target.result);
-                    if (Array.isArray(importedEntries)) {
-                        entries = importedEntries;
-                        saveToLocalStorage();
-                        renderEntries();
-                        alert("백업 데이터를 성공적으로 불러왔습니다!");
-                    } else {
-                        alert("올바르지 않은 파일 형식입니다.");
-                    }
-                } catch (err) {
-                    alert("파일을 읽는 중 오류가 발생했습니다.");
-                }
-            };
-            reader.readAsText(file);
-        }
     </script>
 </head>
 <body class="bg-slate-100 min-h-screen text-slate-800 font-['Noto_Sans_KR'] antialiased">
@@ -777,7 +733,7 @@
                 </div>
             </div>
 
-            <!-- 슬림한 상단 아이콘 그룹 (알림 & 실시간 상태) -->
+            <!-- 상단 슬림 아이콘 그룹 -->
             <div class="flex items-center gap-1.5">
                 <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
                     <i class="fa-solid fa-bell-slash text-xs"></i>
