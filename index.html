@@ -38,6 +38,8 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
+        const REACTION_ICONS = ['😊', '💪', '👍', '❤️', '🎉'];
+
         const TAG_CATEGORIES = [
             { label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
             { label: '⚽ 활동 선택', tags: ['가족 나들이 🚗', '맛있는 식사 🍕', '운동/산책 🏃', '영화/TV 🎬', '휴식 ☕', '쇼핑 🛍️', '공부/독서 📚'] }
@@ -48,6 +50,9 @@
         let selectedTags = [];
         let currentPhotoBase64 = null;
         let editingEntryId = null;
+
+        // 선택된 댓글용 이모지 저장 객체 (entryId: emoji)
+        let selectedCommentEmojis = {};
 
         // -------------------------------------------------------------
         // 초기화 함수
@@ -263,15 +268,8 @@
             if (window.isCloudMode && supabaseClient) {
                 supabaseClient
                     .channel('public:journal_entries')
-                    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'journal_entries' }, payload => {
-                        const newEntry = payload.new;
-                        if (newEntry) {
-                            const authorName = newEntry.author ? newEntry.author.name : '가족';
-                            if (authorName !== (AUTHORS.find(a => a.id === selectedAuthor)?.name)) {
-                                sendWebPushNotification(authorName, newEntry.content || '');
-                            }
-                            loadEntries();
-                        }
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, payload => {
+                        loadEntries();
                     })
                     .subscribe();
             }
@@ -452,7 +450,8 @@
                 dateTimeStr: dtText,
                 tags: [...selectedTags],
                 content: content,
-                imageUrl: currentPhotoBase64
+                imageUrl: currentPhotoBase64,
+                comments: []
             };
 
             if (window.isCloudMode && supabaseClient) {
@@ -506,7 +505,93 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (사진 클릭 시 확대 기능 포함)
+        // 댓글 & 이모지 반응 관련 함수
+        // -------------------------------------------------------------
+        function selectCommentEmoji(entryIdKey, emoji) {
+            if (selectedCommentEmojis[entryIdKey] === emoji) {
+                delete selectedCommentEmojis[entryIdKey];
+            } else {
+                selectedCommentEmojis[entryIdKey] = emoji;
+            }
+            renderEntries();
+        }
+
+        async function addQuickReaction(entryId, timestamp, emoji) {
+            const authorObj = AUTHORS.find(a => a.id === selectedAuthor) || AUTHORS[0];
+            await pushCommentToEntry(entryId, timestamp, {
+                id: Date.now(),
+                author: authorObj,
+                emoji: emoji,
+                text: ''
+            });
+        }
+
+        async function addComment(entryId, timestamp) {
+            const entryIdKey = entryId || timestamp;
+            const inputEl = document.getElementById(`commentInput_${entryIdKey}`);
+            const text = inputEl ? inputEl.value.trim() : '';
+            const emoji = selectedCommentEmojis[entryIdKey] || '';
+
+            if (!text && !emoji) {
+                alert("이모지를 선택하거나 댓글을 입력해 주세요!");
+                return;
+            }
+
+            const authorObj = AUTHORS.find(a => a.id === selectedAuthor) || AUTHORS[0];
+            const commentObj = {
+                id: Date.now(),
+                author: authorObj,
+                emoji: emoji,
+                text: text
+            };
+
+            delete selectedCommentEmojis[entryIdKey];
+            await pushCommentToEntry(entryId, timestamp, commentObj);
+        }
+
+        async function pushCommentToEntry(entryId, timestamp, commentObj) {
+            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            if (!targetEntry) return;
+
+            if (!targetEntry.comments) targetEntry.comments = [];
+            targetEntry.comments.push(commentObj);
+
+            if (window.isCloudMode && supabaseClient && targetEntry.id) {
+                try {
+                    await supabaseClient
+                        .from('journal_entries')
+                        .update({ comments: targetEntry.comments })
+                        .eq('id', targetEntry.id);
+                } catch (err) {
+                    console.error("댓글 동기화 실패:", err);
+                }
+            }
+            saveToLocalStorage();
+            renderEntries();
+        }
+
+        async function deleteComment(entryId, timestamp, commentId) {
+            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            if (!targetEntry || !targetEntry.comments) return;
+
+            targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
+
+            if (window.isCloudMode && supabaseClient && targetEntry.id) {
+                try {
+                    await supabaseClient
+                        .from('journal_entries')
+                        .update({ comments: targetEntry.comments })
+                        .eq('id', targetEntry.id);
+                } catch (err) {
+                    console.error("댓글 삭제 실패:", err);
+                }
+            }
+            saveToLocalStorage();
+            renderEntries();
+        }
+
+        // -------------------------------------------------------------
+        // 일기 리스트 화면 출력 (사진 확대 & 댓글 영역)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -526,9 +611,10 @@
 
             entries.forEach(entry => {
                 const card = document.createElement('div');
-                card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2 hover:shadow-md transition-shadow';
+                card.className = 'bg-white rounded-xl p-3.5 border border-slate-200 shadow-sm flex flex-col gap-2.5 hover:shadow-md transition-shadow';
 
                 const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
+                const entryKey = entry.id || entry.timestamp;
 
                 let tagsHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
@@ -547,6 +633,63 @@
                                 <img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-full object-cover">
                             </div>
                         ` : ''}
+                    </div>
+                `;
+
+                // 기존 댓글 목록 HTML 생성
+                let commentsHTML = '';
+                if (entry.comments && entry.comments.length > 0) {
+                    commentsHTML = entry.comments.map(c => {
+                        const cAuthor = c.author || { name: '가족', text: 'text-slate-600' };
+                        return `
+                            <div class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-xs">
+                                <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                                    <span class="font-bold text-slate-700 shrink-0">${cAuthor.name}:</span>
+                                    ${c.emoji ? `<span class="text-sm shrink-0">${c.emoji}</span>` : ''}
+                                    ${c.text ? `<span class="text-slate-600 truncate">${c.text}</span>` : ''}
+                                </div>
+                                <button onclick="deleteComment(${entry.id || 'null'}, ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
+                                    <i class="fa-solid fa-xmark text-xs"></i>
+                                </button>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // 댓글 이모지 선택 상태
+                const currentSelectedEmoji = selectedCommentEmojis[entryKey] || '';
+
+                // 반응 및 댓글 작성 영역 HTML
+                let commentSectionHTML = `
+                    <div class="border-t border-slate-100 pt-2 flex flex-col gap-2">
+                        <!-- 빠른 반응 이모지 버튼 그룹 -->
+                        <div class="flex items-center gap-1">
+                            <span class="text-[11px] text-slate-400 font-bold mr-1 shrink-0">반응:</span>
+                            ${REACTION_ICONS.map(emoji => `
+                                <button onclick="addQuickReaction(${entry.id || 'null'}, ${entry.timestamp}, '${emoji}')" class="px-1.5 py-0.5 rounded-lg bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 text-sm active:scale-95 transition-all" title="'${emoji}' 반응하기">
+                                    ${emoji}
+                                </button>
+                            `).join('')}
+                        </div>
+
+                        <!-- 등록된 댓글 리스트 -->
+                        ${commentsHTML ? `<div class="flex flex-col gap-1 mt-0.5">${commentsHTML}</div>` : ''}
+
+                        <!-- 댓글 작성 박스 -->
+                        <div class="flex items-center gap-1.5 mt-1">
+                            <!-- 댓글 이모지 선택 버튼 -->
+                            <div class="flex items-center gap-0.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
+                                ${REACTION_ICONS.map(emoji => `
+                                    <button onclick="selectCommentEmoji('${entryKey}', '${emoji}')" class="w-6 h-6 flex items-center justify-center rounded text-xs transition-transform ${currentSelectedEmoji === emoji ? 'bg-indigo-100 border border-indigo-300 scale-110 shadow-sm' : 'hover:bg-slate-200/60'}">
+                                        ${emoji}
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment(${entry.id || 'null'}, ${entry.timestamp})">
+                            <button onclick="addComment(${entry.id || 'null'}, ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
+                                등록
+                            </button>
+                        </div>
                     </div>
                 `;
 
@@ -573,6 +716,7 @@
 
                     ${tagsHTML}
                     ${contentBodyHTML}
+                    ${commentSectionHTML}
                 `;
 
                 container.appendChild(card);
