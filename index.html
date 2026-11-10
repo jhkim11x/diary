@@ -38,7 +38,6 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
-        // 팔뚝('💪') 제거, 엄지('👍') 유지된 반응 이모지 목록
         const REACTION_ICONS = ['😊', '👍', '👎', '❤️', '🎉'];
 
         const TAG_CATEGORIES = [
@@ -587,7 +586,7 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력
+        // 일기 리스트 화면 출력 (글쓴이 옆 태그 출력 적용)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -613,11 +612,10 @@
                 const entryKey = entry.id || entry.timestamp;
                 const isInputOpen = openCommentBoxes[entryKey] || false;
 
-                let tagsHTML = '';
+                // 글쓴이 옆에 함께 붙일 태그 HTML
+                let tagsInlineHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
-                    tagsHTML = `<div class="flex flex-wrap gap-1">` +
-                        entry.tags.map(t => `<span class="px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-semibold">${t}</span>`).join('') +
-                        `</div>`;
+                    tagsInlineHTML = entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">${t}</span>`).join(' ');
                 }
 
                 // 일기 본문 영역 (클릭 시 댓글 작성창 토글)
@@ -687,9 +685,10 @@
                             <span class="w-7 h-7 rounded-full ${author.bgLight} ${author.text} flex items-center justify-center text-xs font-bold border ${author.border}">
                                 <i class="fa-solid ${author.icon}"></i>
                             </span>
-                            <div>
+                            <div class="flex items-center gap-1.5 flex-wrap">
                                 <span class="font-bold text-slate-800 text-sm">${author.name}</span>
-                                <span class="text-[11px] text-slate-400 block">${entry.dateTimeStr || ''}</span>
+                                ${tagsInlineHTML}
+                                <span class="text-[11px] text-slate-400 block w-full">${entry.dateTimeStr || ''}</span>
                             </div>
                         </div>
                         <div class="flex items-center gap-0.5">
@@ -702,7 +701,6 @@
                         </div>
                     </div>
 
-                    ${tagsHTML}
                     ${contentBodyHTML}
                     ${commentsHTML}
                     ${commentInputSectionHTML}
