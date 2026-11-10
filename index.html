@@ -23,7 +23,7 @@
 
     <script>
         // -------------------------------------------------------------
-        // 원본 Supabase 설정 및 식별 데이터
+        // Supabase 설정 및 기본 데이터 정의
         // -------------------------------------------------------------
         const SUPABASE_URL = "https://gookdripmzsaxfgfigai.supabase.co";
         const SUPABASE_KEY = "sb_publishable_2G9uc2yJN0DSuzWo96WpAg_EoiVePJo";
@@ -37,7 +37,6 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
-        // 반응 이모지 (알통 제거, 엄지 아래 추가)
         const REACTION_ICONS = ['😊', '👍', '👎', '❤️', '🎉'];
 
         const TAG_CATEGORIES = [
@@ -55,7 +54,7 @@
         let openCommentBoxes = {};
 
         // -------------------------------------------------------------
-        // Supabase 초기화 및 실시간 클라우드 동기화 (원래 방식으로 완전 복구)
+        // 안전 초기화
         // -------------------------------------------------------------
         function initSupabaseSafe() {
             try {
@@ -64,7 +63,7 @@
                     window.isCloudMode = true;
                 }
             } catch (err) {
-                console.warn("Supabase 구동 실패:", err);
+                console.warn("Supabase 연결 실패:", err);
                 window.isCloudMode = false;
             }
         }
@@ -94,11 +93,11 @@
                 if (window.isCloudMode) {
                     statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>`;
-                    statusBadge.title = "실시간 공유 중";
+                    statusBadge.title = "실시간 연동 중";
                 } else {
                     statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>`;
-                    statusBadge.title = "내 기기 저장 모드";
+                    statusBadge.title = "로컬 저장 모드";
                 }
             }
 
@@ -124,9 +123,19 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 불러오기 (원래 아내분 글 동기화 로직)
+        // 완벽한 데이터 로드 및 융합 (로컬 데이터 절대 보존)
         // -------------------------------------------------------------
         async function loadEntries() {
+            let localEntries = [];
+            const local = localStorage.getItem('seodung_journal_entries');
+            if (local) {
+                try {
+                    localEntries = JSON.parse(local);
+                } catch (e) {
+                    localEntries = [];
+                }
+            }
+
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -135,18 +144,31 @@
                         .order('timestamp', { ascending: false });
 
                     if (!error && data) {
-                        entries = data;
-                        localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
+                        const map = new Map();
+                        
+                        // 로컬 데이터 먼저 유지
+                        localEntries.forEach(item => {
+                            const key = item.id || item.timestamp;
+                            if (key) map.set(String(key), item);
+                        });
+
+                        // 서버 데이터로 최신화 병합
+                        data.forEach(item => {
+                            const key = item.id || item.timestamp;
+                            if (key) map.set(String(key), item);
+                        });
+
+                        entries = Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+                        saveToLocalStorage();
                         renderEntries();
                         return;
                     }
                 } catch (err) {
-                    console.warn("클라우드 로드 중 로컬로 전환:", err);
+                    console.warn("클라우드 읽기 실패, 로컬 유지:", err);
                 }
             }
 
-            const local = localStorage.getItem('seodung_journal_entries');
-            entries = local ? JSON.parse(local) : [];
+            entries = localEntries;
             renderEntries();
         }
 
@@ -261,9 +283,6 @@
             });
         }
 
-        // -------------------------------------------------------------
-        // 웹 푸시 알림
-        // -------------------------------------------------------------
         function requestNotificationPermission() {
             if ("Notification" in window) {
                 if (Notification.permission === "default") {
@@ -345,10 +364,14 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 CRUD (원본 클라우드 동기화 로직)
+        // 일기 저장/수정/삭제 (로컬 우선 저장 보장)
         // -------------------------------------------------------------
+        function saveToLocalStorage() {
+            localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
+        }
+
         function editEntry(id, timestamp) {
-            const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
+            const entry = entries.find(e => (id && String(e.id) === String(id)) || (timestamp && Number(e.timestamp) === Number(timestamp)));
             if (!entry) return;
 
             editingEntryId = id || timestamp;
@@ -408,12 +431,15 @@
             const dtText = document.getElementById('currentDateTime')?.textContent || '';
 
             if (editingEntryId !== null) {
-                const targetEntry = entries.find(e => (e.id && e.id === editingEntryId) || (e.timestamp && e.timestamp === editingEntryId));
+                const targetEntry = entries.find(e => (e.id && String(e.id) === String(editingEntryId)) || (e.timestamp && Number(e.timestamp) === Number(editingEntryId)));
                 if (targetEntry) {
                     targetEntry.author = authorObj;
                     targetEntry.tags = [...selectedTags];
                     targetEntry.content = content;
                     targetEntry.imageUrl = currentPhotoBase64;
+
+                    saveToLocalStorage();
+                    renderEntries();
 
                     if (window.isCloudMode && supabaseClient && targetEntry.id) {
                         try {
@@ -427,13 +453,11 @@
                                 })
                                 .eq('id', targetEntry.id);
                         } catch (err) {
-                            console.error("수정 동기화 오류:", err);
+                            console.warn("클라우드 수정 오류:", err);
                         }
                     }
-                    saveToLocalStorage();
                 }
                 cancelEdit();
-                renderEntries();
                 return;
             }
 
@@ -447,6 +471,13 @@
                 comments: []
             };
 
+            // 1. 로컬에 즉시 저장 (사라짐 100% 방지)
+            entries.unshift(newEntry);
+            saveToLocalStorage();
+            renderEntries();
+            cancelEdit();
+
+            // 2. 서버 전송
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -455,29 +486,25 @@
                         .select();
 
                     if (!error && data && data[0]) {
-                        entries.unshift(data[0]);
-                    } else {
-                        entries.unshift(newEntry);
+                        entries[0] = data[0];
+                        saveToLocalStorage();
+                        renderEntries();
                     }
                 } catch (err) {
-                    console.error("저장 동기화 오류:", err);
-                    entries.unshift(newEntry);
+                    console.warn("클라우드 전송 실패 (로컬 저장은 완료됨):", err);
                 }
-            } else {
-                entries.unshift(newEntry);
             }
-
-            saveToLocalStorage();
-            cancelEdit();
-            renderEntries();
-        }
-
-        function saveToLocalStorage() {
-            localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
         }
 
         async function deleteEntry(id, timestamp) {
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
+
+            entries = entries.filter(e => {
+                if (id && e.id) return String(e.id) !== String(id);
+                return Number(e.timestamp) !== Number(timestamp);
+            });
+            saveToLocalStorage();
+            renderEntries();
 
             if (window.isCloudMode && supabaseClient && id) {
                 try {
@@ -486,17 +513,13 @@
                         .delete()
                         .eq('id', id);
                 } catch (err) {
-                    console.error("삭제 동기화 오류:", err);
+                    console.warn("클라우드 삭제 오류:", err);
                 }
             }
-
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 댓글 및 반응 로직 (클라우드 상시 저장 보장)
+        // 댓글 및 이모지 반응 (로컬 즉시 저장 보장)
         // -------------------------------------------------------------
         function toggleCommentInput(entryIdKey) {
             openCommentBoxes[entryIdKey] = !openCommentBoxes[entryIdKey];
@@ -536,12 +559,19 @@
         }
 
         async function pushCommentToEntry(entryId, timestamp, commentObj) {
-            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            const targetEntry = entries.find(e => {
+                if (entryId && e.id) return String(e.id) === String(entryId);
+                return Number(e.timestamp) === Number(timestamp);
+            });
             if (!targetEntry) return;
 
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
+            // 로컬에 먼저 댓글 완전 동기화 저장
+            saveToLocalStorage();
+            renderEntries();
+
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
                     await supabaseClient
@@ -549,18 +579,22 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.error("댓글 동기화 오류:", err);
+                    console.warn("댓글 클라우드 저장 실패:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         async function deleteComment(entryId, timestamp, commentId) {
-            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            const targetEntry = entries.find(e => {
+                if (entryId && e.id) return String(e.id) === String(entryId);
+                return Number(e.timestamp) === Number(timestamp);
+            });
             if (!targetEntry || !targetEntry.comments) return;
 
-            targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
+            targetEntry.comments = targetEntry.comments.filter(c => String(c.id) !== String(commentId));
+
+            saveToLocalStorage();
+            renderEntries();
 
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
@@ -569,15 +603,13 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.error("댓글 삭제 동기화 오류:", err);
+                    console.warn("댓글 삭제 동기화 오류:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 화면 렌더링 (요청하신 디자인 3가지 정확히 적용)
+        // 일기 목록 렌더링 (요청 디자인 세 가지 모두 적용)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -603,13 +635,13 @@
                 const entryKey = entry.id || entry.timestamp;
                 const isInputOpen = openCommentBoxes[entryKey] || false;
 
-                // 디자인 3: 글쓴이 이름 바로 옆에 태그 배치
+                // 글쓴이 이름 바로 옆 태그 배치
                 let tagsInlineHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
                     tagsInlineHTML = entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">${t}</span>`).join(' ');
                 }
 
-                // 디자인 1: 본문 클릭 시 작성창 토글
+                // 본문 클릭 시 작성창 토글
                 let contentBodyHTML = `
                     <div class="flex gap-3 items-start cursor-pointer group" onclick="toggleCommentInput('${entryKey}')" title="클릭하여 댓글 작성 창 열기/닫기">
                         <div class="flex-1">
@@ -623,7 +655,7 @@
                     </div>
                 `;
 
-                // 디자인 1: 댓글 상시 노출
+                // 댓글 목록 항상 표시
                 let commentsHTML = '';
                 if (entry.comments && entry.comments.length > 0) {
                     commentsHTML = `
@@ -637,7 +669,7 @@
                                             ${c.emoji ? `<span class="text-sm shrink-0">${c.emoji}</span>` : ''}
                                             ${c.text ? `<span class="text-slate-600 truncate">${c.text}</span>` : ''}
                                         </div>
-                                        <button onclick="deleteComment(${entry.id || 'null'}, ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
+                                        <button onclick="deleteComment('${entry.id || ''}', ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
                                             <i class="fa-solid fa-xmark text-xs"></i>
                                         </button>
                                     </div>
@@ -649,7 +681,7 @@
 
                 const currentSelectedEmoji = selectedCommentEmojis[entryKey] || '';
 
-                // 디자인 2: 알통 제거 및 엄지 아래 👎 포함 반응 버튼
+                // 반응 선택 버튼 (알통 제거, 엄지 아래 👎 포함)
                 let commentInputSectionHTML = `
                     <div class="${isInputOpen ? 'flex flex-col gap-2 pt-2 border-t border-slate-100' : 'hidden'}">
                         <div class="flex items-center gap-1.5">
@@ -660,8 +692,8 @@
                                     </button>
                                 `).join('')}
                             </div>
-                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment(${entry.id || 'null'}, ${entry.timestamp})">
-                            <button onclick="addComment(${entry.id || 'null'}, ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
+                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment('${entry.id || ''}', ${entry.timestamp})">
+                            <button onclick="addComment('${entry.id || ''}', ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
                                 등록
                             </button>
                         </div>
@@ -681,10 +713,10 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-0.5">
-                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
+                            <button onclick="editEntry('${entry.id || ''}', ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
                                 <i class="fa-solid fa-pen text-xs"></i>
                             </button>
-                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
+                            <button onclick="deleteEntry('${entry.id || ''}', ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
                                 <i class="fa-solid fa-trash-can text-xs"></i>
                             </button>
                         </div>
@@ -736,7 +768,7 @@
                 </div>
             </div>
 
-            <!-- 상단 상태 아이콘 -->
+            <!-- 상단 슬림 상태 아이콘 -->
             <div class="flex items-center gap-1.5">
                 <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
                     <i class="fa-solid fa-bell-slash text-xs"></i>
