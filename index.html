@@ -319,10 +319,10 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 CRUD (로컬 저장소 최우선 반영 + 클라우드 백업)
+        // 데이터 불러오기 및 저장 (로컬 최우선 보호 안전장치 적용)
         // -------------------------------------------------------------
         async function loadEntries() {
-            // 1. 기존에 잘 작동하던 로컬 저장소에서 먼저 불러오기
+            // 1. 무조건 로컬 데이터부터 화면에 즉시 띄움 (사라짐 방지)
             const local = localStorage.getItem('seodung_journal_entries');
             if (local) {
                 try {
@@ -333,7 +333,7 @@
                 }
             }
 
-            // 2. 클라우드에서 가져오기 시도 (성공 시 로컬과 합쳐서 갱신)
+            // 2. 서버(Supabase)에서 데이터를 가져와 로컬 데이터와 병합
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -342,12 +342,27 @@
                         .order('timestamp', { ascending: false });
 
                     if (!error && data && data.length > 0) {
-                        entries = data;
+                        // 서버 데이터와 로컬 데이터를 합쳐서 데이터 누락 방지
+                        const mergedMap = new Map();
+                        
+                        // 기존 로컬 데이터 먼저 등록
+                        entries.forEach(e => {
+                            const key = e.id || e.timestamp;
+                            if (key) mergedMap.set(String(key), e);
+                        });
+
+                        // 서버 데이터로 덮어쓰기 (최신 상태 반영)
+                        data.forEach(e => {
+                            const key = e.id || e.timestamp;
+                            if (key) mergedMap.set(String(key), e);
+                        });
+
+                        entries = Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
                         saveToLocalStorage();
                         renderEntries();
                     }
                 } catch (err) {
-                    console.warn("Supabase 데이터 로드 에러:", err);
+                    console.warn("Supabase 동기화 중 오류 (로컬 모드 유지):", err);
                 }
             }
         }
@@ -453,13 +468,13 @@
                 comments: []
             };
 
-            // 무조건 로컬에 먼저 안전하게 반영
+            // 1. 무조건 로컬 저장소에 먼저 안전하게 반영하고 화면 렌더링
             entries.unshift(newEntry);
             saveToLocalStorage();
             renderEntries();
             cancelEdit();
 
-            // 클라우드 저장 시도
+            // 2. 서버(Supabase) 저장 시도
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -473,7 +488,7 @@
                         renderEntries();
                     }
                 } catch (err) {
-                    console.error("클라우드 저장 실패:", err);
+                    console.error("클라우드 저장 실패 (로컬에 안전하게 보존됨):", err);
                 }
             }
         }
