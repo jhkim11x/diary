@@ -38,7 +38,8 @@
             { id: '딸', name: '딸', icon: 'fa-user-ninja', color: 'bg-purple-500', text: 'text-purple-600', bgLight: 'bg-purple-50', border: 'border-purple-200' }
         ];
 
-        const REACTION_ICONS = ['😊', '💪', '👍', '❤️', '🎉'];
+        // 팔뚝('💪') 제거, 엄지('👍') 유지된 반응 이모지 목록
+        const REACTION_ICONS = ['😊', '👍', '👎', '❤️', '🎉'];
 
         const TAG_CATEGORIES = [
             { label: '😊 기분 선택', tags: ['행복 😊', '기쁨 😆', '신남 🎉', '슬픔 😢', '서운 🥺', '평온 🌿', '피곤 😴', '우울 🌧️', '뿌듯 ✨', '감사 🙏'] },
@@ -51,10 +52,7 @@
         let currentPhotoBase64 = null;
         let editingEntryId = null;
 
-        // 선택된 댓글용 이모지 저장 객체 (entryId: emoji)
         let selectedCommentEmojis = {};
-
-        // 열려 있는 댓글 박스 관리 객체 (entryId: boolean)
         let openCommentBoxes = {};
 
         // -------------------------------------------------------------
@@ -510,7 +508,7 @@
         // -------------------------------------------------------------
         // 댓글 & 이모지 반응 관련 함수
         // -------------------------------------------------------------
-        function toggleCommentBox(entryIdKey) {
+        function toggleCommentInput(entryIdKey) {
             openCommentBoxes[entryIdKey] = !openCommentBoxes[entryIdKey];
             renderEntries();
         }
@@ -522,16 +520,6 @@
                 selectedCommentEmojis[entryIdKey] = emoji;
             }
             renderEntries();
-        }
-
-        async function addQuickReaction(entryId, timestamp, emoji) {
-            const authorObj = AUTHORS.find(a => a.id === selectedAuthor) || AUTHORS[0];
-            await pushCommentToEntry(entryId, timestamp, {
-                id: Date.now(),
-                author: authorObj,
-                emoji: emoji,
-                text: ''
-            });
         }
 
         async function addComment(entryId, timestamp) {
@@ -599,7 +587,7 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (사진 확대 & 토글형 댓글 영역)
+        // 일기 리스트 화면 출력
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -623,7 +611,7 @@
 
                 const author = entry.author || { name: '가족', icon: 'fa-user', bgLight: 'bg-slate-50', text: 'text-slate-600', border: 'border-slate-300' };
                 const entryKey = entry.id || entry.timestamp;
-                const isOpen = openCommentBoxes[entryKey] || false;
+                const isInputOpen = openCommentBoxes[entryKey] || false;
 
                 let tagsHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
@@ -632,11 +620,11 @@
                         `</div>`;
                 }
 
-                // 일기 내용 클릭 시 댓글창 토글 기능 추가
+                // 일기 본문 영역 (클릭 시 댓글 작성창 토글)
                 let contentBodyHTML = `
-                    <div class="flex gap-3 items-start cursor-pointer" onclick="toggleCommentBox('${entryKey}')" title="댓글 및 반응 보기/접기">
+                    <div class="flex gap-3 items-start cursor-pointer group" onclick="toggleCommentInput('${entryKey}')" title="클릭하여 댓글 작성 창 열기/닫기">
                         <div class="flex-1">
-                            <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
+                            <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap group-hover:text-indigo-900 transition-colors">${entry.content}</p>
                         </div>
                         ${entry.imageUrl ? `
                             <div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 hover:opacity-90 transition-opacity" onclick="event.stopPropagation(); openPhotoModal('${entry.imageUrl}')">
@@ -646,73 +634,49 @@
                     </div>
                 `;
 
-                // 등록된 댓글 목록 HTML 생성
+                // 등록된 댓글 목록 HTML 생성 (항상 표시됨)
                 let commentsHTML = '';
                 if (entry.comments && entry.comments.length > 0) {
-                    commentsHTML = entry.comments.map(c => {
-                        const cAuthor = c.author || { name: '가족', text: 'text-slate-600' };
-                        return `
-                            <div class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-xs">
-                                <div class="flex items-center gap-1.5 flex-1 min-w-0">
-                                    <span class="font-bold text-slate-700 shrink-0">${cAuthor.name}:</span>
-                                    ${c.emoji ? `<span class="text-sm shrink-0">${c.emoji}</span>` : ''}
-                                    ${c.text ? `<span class="text-slate-600 truncate">${c.text}</span>` : ''}
-                                </div>
-                                <button onclick="deleteComment(${entry.id || 'null'}, ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
-                                    <i class="fa-solid fa-xmark text-xs"></i>
-                                </button>
-                            </div>
-                        `;
-                    }).join('');
+                    commentsHTML = `
+                        <div class="flex flex-col gap-1 border-t border-slate-100 pt-2">
+                            ${entry.comments.map(c => {
+                                const cAuthor = c.author || { name: '가족', text: 'text-slate-600' };
+                                return `
+                                    <div class="flex items-center justify-between bg-slate-50 border border-slate-100 rounded-lg px-2.5 py-1.5 text-xs">
+                                        <div class="flex items-center gap-1.5 flex-1 min-w-0">
+                                            <span class="font-bold text-slate-700 shrink-0">${cAuthor.name}:</span>
+                                            ${c.emoji ? `<span class="text-sm shrink-0">${c.emoji}</span>` : ''}
+                                            ${c.text ? `<span class="text-slate-600 truncate">${c.text}</span>` : ''}
+                                        </div>
+                                        <button onclick="deleteComment(${entry.id || 'null'}, ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
+                                            <i class="fa-solid fa-xmark text-xs"></i>
+                                        </button>
+                                    </div>
+                                `;
+                            }).join('')}
+                        </div>
+                    `;
                 }
-
-                // 댓글 요약 배지 (닫혀있을 때 댓글/반응 개수 표시용)
-                const commentCount = entry.comments ? entry.comments.length : 0;
 
                 // 댓글 이모지 선택 상태
                 const currentSelectedEmoji = selectedCommentEmojis[entryKey] || '';
 
-                // 반응 및 댓글 작성 영역 HTML (토글 상태에 따라 보이고 숨김)
-                let commentSectionHTML = `
-                    <div class="border-t border-slate-100 pt-2 flex flex-col gap-2">
-                        <!-- 항상 보이는 토글 버튼 바 -->
-                        <div class="flex items-center justify-between">
-                            <button onclick="toggleCommentBox('${entryKey}')" class="flex items-center gap-1.5 text-xs font-bold text-indigo-600 hover:text-indigo-700 py-1 transition-colors">
-                                <i class="fa-regular fa-comment-dots"></i> 
-                                <span>댓글 및 반응 ${commentCount > 0 ? `(${commentCount})` : ''}</span>
-                                <i class="fa-solid ${isOpen ? 'fa-chevron-up' : 'fa-chevron-down'} text-[10px] ml-0.5"></i>
-                            </button>
-
-                            <!-- 빠른 반응 이모지 버튼들 (버튼 바에서 바로 누를 수 있게 배치) -->
-                            <div class="flex items-center gap-1">
+                // 일기 내용을 클릭했을 때만 나타나는 댓글 입력 영역
+                let commentInputSectionHTML = `
+                    <div class="${isInputOpen ? 'flex flex-col gap-2 pt-2 border-t border-slate-100' : 'hidden'}">
+                        <div class="flex items-center gap-1.5">
+                            <!-- 이모지 반응 선택 버튼들 -->
+                            <div class="flex items-center gap-0.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
                                 ${REACTION_ICONS.map(emoji => `
-                                    <button onclick="addQuickReaction(${entry.id || 'null'}, ${entry.timestamp}, '${emoji}')" class="w-7 h-7 rounded-full bg-slate-50 border border-slate-200 hover:bg-indigo-50 hover:border-indigo-200 text-xs flex items-center justify-center active:scale-95 transition-all" title="'${emoji}' 반응하기">
+                                    <button onclick="selectCommentEmoji('${entryKey}', '${emoji}')" class="w-6 h-6 flex items-center justify-center rounded text-xs transition-transform ${currentSelectedEmoji === emoji ? 'bg-indigo-100 border border-indigo-300 scale-110 shadow-sm' : 'hover:bg-slate-200/60'}">
                                         ${emoji}
                                     </button>
                                 `).join('')}
                             </div>
-                        </div>
-
-                        <!-- 펼쳐졌을 때만 보이는 댓글 작성 및 리스트 영역 -->
-                        <div class="${isOpen ? 'flex flex-col gap-2 pt-1' : 'hidden'}">
-                            <!-- 등록된 댓글 리스트 -->
-                            ${commentsHTML ? `<div class="flex flex-col gap-1">${commentsHTML}</div>` : '<p class="text-[11px] text-slate-400 text-center py-1">아직 남겨진 댓글이 없습니다. 첫 댓글을 남겨보세요!</p>'}
-
-                            <!-- 댓글 작성 박스 -->
-                            <div class="flex items-center gap-1.5 mt-1">
-                                <!-- 댓글 이모지 선택 버튼 -->
-                                <div class="flex items-center gap-0.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
-                                    ${REACTION_ICONS.map(emoji => `
-                                        <button onclick="selectCommentEmoji('${entryKey}', '${emoji}')" class="w-6 h-6 flex items-center justify-center rounded text-xs transition-transform ${currentSelectedEmoji === emoji ? 'bg-indigo-100 border border-indigo-300 scale-110 shadow-sm' : 'hover:bg-slate-200/60'}">
-                                            ${emoji}
-                                        </button>
-                                    `).join('')}
-                                </div>
-                                <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment(${entry.id || 'null'}, ${entry.timestamp})">
-                                <button onclick="addComment(${entry.id || 'null'}, ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
-                                    등록
-                                </button>
-                            </div>
+                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment(${entry.id || 'null'}, ${entry.timestamp})">
+                            <button onclick="addComment(${entry.id || 'null'}, ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
+                                등록
+                            </button>
                         </div>
                     </div>
                 `;
@@ -740,7 +704,8 @@
 
                     ${tagsHTML}
                     ${contentBodyHTML}
-                    ${commentSectionHTML}
+                    ${commentsHTML}
+                    ${commentInputSectionHTML}
                 `;
 
                 container.appendChild(card);
