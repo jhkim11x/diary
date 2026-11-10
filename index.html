@@ -506,7 +506,7 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (사진 1/4 크기, 글 우측 side-by-side 배치)
+        // 일기 리스트 화면 출력 (사진 클릭 시 확대 기능 포함)
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -543,7 +543,7 @@
                             <p class="text-slate-700 text-base font-normal leading-relaxed whitespace-pre-wrap">${entry.content}</p>
                         </div>
                         ${entry.imageUrl ? `
-                            <div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
+                            <div class="w-20 h-20 shrink-0 rounded-lg overflow-hidden border border-slate-200 bg-slate-50 cursor-pointer hover:opacity-90 transition-opacity" onclick="openPhotoModal('${entry.imageUrl}')">
                                 <img src="${entry.imageUrl}" alt="일기 사진" class="w-full h-full object-cover">
                             </div>
                         ` : ''}
@@ -577,6 +577,27 @@
 
                 container.appendChild(card);
             });
+        }
+
+        // -------------------------------------------------------------
+        // 사진 크게 보기 (모달 팝업) 함수
+        // -------------------------------------------------------------
+        function openPhotoModal(imgSrc) {
+            const modal = document.getElementById('photoModal');
+            const modalImg = document.getElementById('modalImage');
+            if (modal && modalImg) {
+                modalImg.src = imgSrc;
+                modal.classList.remove('hidden');
+                modal.classList.add('flex');
+            }
+        }
+
+        function closePhotoModal() {
+            const modal = document.getElementById('photoModal');
+            if (modal) {
+                modal.classList.add('hidden');
+                modal.classList.remove('flex');
+            }
         }
 
         // -------------------------------------------------------------
@@ -673,57 +694,45 @@
                 <div id="selectedTagsContainer" class="flex flex-wrap gap-1.5 min-h-[24px] items-center"></div>
             </section>
 
-            <!-- 일기 입력 & 사진 첨부 -->
+            <!-- 일기 입력 서식 -->
             <section class="bg-white p-2.5 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-2">
-                <div class="flex items-center justify-between">
-                    <label class="block text-xs font-bold text-slate-500 flex items-center gap-1">
-                        <i class="fa-solid fa-pen-to-square text-indigo-500"></i> 오늘 일기쓰기
-                    </label>
-                    <span class="text-[11px] text-indigo-500 font-bold">* 하루 한 장 사진 첨부</span>
-                </div>
+                <textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 한 줄로 남겨보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 placeholder-slate-400 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"></textarea>
                 
-                <textarea id="journalContent" rows="3" placeholder="오늘 어떤 일이 있었나요? 편하게 적어보세요..." class="w-full p-2.5 rounded-lg border border-slate-200 text-slate-800 text-base placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none leading-relaxed"></textarea>
-
-                <!-- 사진 미리보기 (썸네일 크기) -->
-                <div id="photoPreviewContainer" class="relative hidden w-20 h-20 rounded-lg overflow-hidden border border-slate-200 bg-slate-50">
-                    <img id="photoPreview" src="" alt="첨부 사진 미리보기" class="w-full h-full object-cover">
-                    <button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 rounded-full bg-slate-900/70 text-white flex items-center justify-center hover:bg-rose-600 transition-colors">
-                        <i class="fa-solid fa-xmark text-[10px]"></i>
+                <!-- 사진 미리보기 -->
+                <div id="photoPreviewContainer" class="relative w-20 h-20 rounded-lg overflow-hidden border border-slate-200 hidden">
+                    <img id="photoPreview" src="" alt="미리보기" class="w-full h-full object-cover">
+                    <button type="button" onclick="removePhoto()" class="absolute top-1 right-1 w-5 h-5 bg-black/60 text-white rounded-full flex items-center justify-center text-xs hover:bg-black/80">
+                        <i class="fa-solid fa-xmark"></i>
                     </button>
                 </div>
 
                 <!-- 하단 버튼들 -->
-                <div class="flex items-center gap-1.5 pt-0.5">
-                    <label for="photoInput" class="flex-1 py-2 px-2.5 rounded-xl border border-slate-300 bg-slate-50 text-slate-700 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
-                        <i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 첨부
+                <div class="flex items-center gap-2 pt-1 border-t border-slate-100">
+                    <label class="flex-1 py-2.5 px-3 rounded-xl border border-slate-200 bg-slate-50 text-slate-600 font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer hover:bg-slate-100 transition-colors">
+                        <i class="fa-solid fa-camera text-indigo-500 text-sm"></i> 사진 추가
+                        <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
                     </label>
-                    <input type="file" id="photoInput" accept="image/*" onchange="handleImageSelect(event)" class="hidden">
-
-                    <button type="button" id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
+                    <button id="submitBtn" onclick="saveEntry()" class="flex-[2] py-2.5 px-3 rounded-xl bg-indigo-600 text-white font-bold text-sm flex items-center justify-center gap-1.5 shadow-indigo-100 shadow-md hover:bg-indigo-700 active:scale-95 transition-all">
                         <i class="fa-solid fa-paper-plane text-xs"></i> 등록하기
                     </button>
                 </div>
             </section>
 
-            <!-- 백업/불러오기 -->
-            <section class="flex gap-1.5">
-                <button type="button" onclick="downloadBackup()" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50">
-                    <i class="fa-solid fa-download text-indigo-500"></i> 백업 받기
-                </button>
-                <label for="backupInput" class="flex-1 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-600 font-semibold text-xs flex items-center justify-center gap-1 hover:bg-slate-50 cursor-pointer">
-                    <i class="fa-solid fa-upload text-indigo-500"></i> 불러오기
-                </label>
-                <input type="file" id="backupInput" accept=".json" onchange="uploadBackup(event)" class="hidden">
-            </section>
-
-            <!-- 일기 리스트 -->
-            <section class="flex flex-col gap-2 mt-1">
-                <h2 class="text-xs font-bold text-slate-500 flex items-center gap-1 px-1">
-                    <i class="fa-solid fa-list-ul text-indigo-500"></i> 우리 가족 일기 목록
-                </h2>
-                <div id="entriesContainer" class="flex flex-col gap-2"></div>
+            <!-- 일기 목록 -->
+            <section id="entriesContainer" class="flex flex-col gap-2.5 pb-6">
+                <!-- JS로 동적 생성됨 -->
             </section>
         </main>
+    </div>
+
+    <!-- 사진 확대 모달 (팝업) -->
+    <div id="photoModal" class="fixed inset-0 z-50 bg-black/80 hidden items-center justify-center p-4" onclick="closePhotoModal()">
+        <div class="relative max-w-lg w-full bg-transparent flex flex-col items-center justify-center" onclick="event.stopPropagation()">
+            <button onclick="closePhotoModal()" class="absolute -top-10 right-0 text-white hover:text-slate-300 text-2xl font-bold p-1 focus:outline-none">
+                <i class="fa-solid fa-xmark"></i>
+            </button>
+            <img id="modalImage" src="" alt="확대된 사진" class="max-w-full max-h-[80vh] rounded-2xl shadow-2xl object-contain border border-white/20">
+        </div>
     </div>
 </body>
 </html>
