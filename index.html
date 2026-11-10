@@ -319,9 +319,21 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 CRUD
+        // 데이터 CRUD (로컬 저장소 최우선 반영 + 클라우드 백업)
         // -------------------------------------------------------------
         async function loadEntries() {
+            // 1. 기존에 잘 작동하던 로컬 저장소에서 먼저 불러오기
+            const local = localStorage.getItem('seodung_journal_entries');
+            if (local) {
+                try {
+                    entries = JSON.parse(local);
+                    renderEntries();
+                } catch (e) {
+                    entries = [];
+                }
+            }
+
+            // 2. 클라우드에서 가져오기 시도 (성공 시 로컬과 합쳐서 갱신)
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -329,19 +341,15 @@
                         .select('*')
                         .order('timestamp', { ascending: false });
 
-                    if (!error && data) {
+                    if (!error && data && data.length > 0) {
                         entries = data;
+                        saveToLocalStorage();
                         renderEntries();
-                        return;
                     }
                 } catch (err) {
                     console.warn("Supabase 데이터 로드 에러:", err);
                 }
             }
-
-            const local = localStorage.getItem('seodung_journal_entries');
-            entries = local ? JSON.parse(local) : [];
-            renderEntries();
         }
 
         function editEntry(id, timestamp) {
@@ -412,6 +420,9 @@
                     targetEntry.content = content;
                     targetEntry.imageUrl = currentPhotoBase64;
 
+                    saveToLocalStorage();
+                    renderEntries();
+
                     if (window.isCloudMode && supabaseClient && targetEntry.id) {
                         try {
                             await supabaseClient
@@ -427,10 +438,8 @@
                             console.error("클라우드 수정 실패:", err);
                         }
                     }
-                    saveToLocalStorage();
                 }
                 cancelEdit();
-                renderEntries();
                 return;
             }
 
@@ -444,6 +453,13 @@
                 comments: []
             };
 
+            // 무조건 로컬에 먼저 안전하게 반영
+            entries.unshift(newEntry);
+            saveToLocalStorage();
+            renderEntries();
+            cancelEdit();
+
+            // 클라우드 저장 시도
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -451,24 +467,15 @@
                         .insert([newEntry])
                         .select();
 
-                    if (error) throw error;
-                    if (data && data[0]) {
-                        entries.unshift(data[0]);
-                    } else {
-                        entries.unshift(newEntry);
+                    if (!error && data && data[0]) {
+                        entries[0] = data[0];
+                        saveToLocalStorage();
+                        renderEntries();
                     }
                 } catch (err) {
                     console.error("클라우드 저장 실패:", err);
-                    entries.unshift(newEntry);
-                    saveToLocalStorage();
                 }
-            } else {
-                entries.unshift(newEntry);
-                saveToLocalStorage();
             }
-
-            cancelEdit();
-            renderEntries();
         }
 
         function saveToLocalStorage() {
@@ -477,6 +484,10 @@
 
         async function deleteEntry(id, timestamp) {
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
+
+            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
+            saveToLocalStorage();
+            renderEntries();
 
             if (window.isCloudMode && supabaseClient && id) {
                 try {
@@ -488,10 +499,6 @@
                     console.error("클라우드 삭제 실패:", err);
                 }
             }
-
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
@@ -541,6 +548,9 @@
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
+            saveToLocalStorage();
+            renderEntries();
+
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
                     await supabaseClient
@@ -551,8 +561,6 @@
                     console.error("댓글 동기화 실패:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         async function deleteComment(entryId, timestamp, commentId) {
@@ -560,6 +568,9 @@
             if (!targetEntry || !targetEntry.comments) return;
 
             targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
+
+            saveToLocalStorage();
+            renderEntries();
 
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
@@ -571,8 +582,6 @@
                     console.error("댓글 삭제 실패:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
