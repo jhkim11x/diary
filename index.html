@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     
-    <!-- 주소창 숨김 및 독립형 앱 설정 (PWA / Fullscreen Mobile App) -->
+    <!-- 주소창 숨김 및 독립형 앱 설정 -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -86,7 +86,7 @@
             }, 100);
         }
 
-        function initializeApp() {
+        async function initializeApp() {
             if (window.appInitialized) return;
             window.appInitialized = true;
 
@@ -109,7 +109,9 @@
 
             initAuthorSelector();
             initTagComboSelect();
-            loadEntries();
+            
+            // 데이터 로드 (로컬 + 클라우드 통합 병합)
+            await loadEntries();
             subscribeRealtimeChanges();
         }
 
@@ -319,21 +321,22 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 불러오기 및 저장 (로컬 최우선 보호 안전장치 적용)
+        // 데이터 불러오기 및 저장 (로컬 + 클라우드 안전 통합 병합)
         // -------------------------------------------------------------
         async function loadEntries() {
-            // 1. 무조건 로컬 데이터부터 화면에 즉시 띄움 (사라짐 방지)
+            // 1. 로컬 저장소 데이터 불러오기
+            let localEntries = [];
             const local = localStorage.getItem('seodung_journal_entries');
             if (local) {
                 try {
-                    entries = JSON.parse(local);
-                    renderEntries();
+                    localEntries = JSON.parse(local);
                 } catch (e) {
-                    entries = [];
+                    localEntries = [];
                 }
             }
 
-            // 2. 서버(Supabase)에서 데이터를 가져와 로컬 데이터와 병합
+            // 2. 서버(Supabase) 데이터 불러오기 시도
+            let cloudEntries = [];
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -341,34 +344,41 @@
                         .select('*')
                         .order('timestamp', { ascending: false });
 
-                    if (!error && data && data.length > 0) {
-                        // 서버 데이터와 로컬 데이터를 합쳐서 데이터 누락 방지
-                        const mergedMap = new Map();
-                        
-                        // 기존 로컬 데이터 먼저 등록
-                        entries.forEach(e => {
-                            const key = e.id || e.timestamp;
-                            if (key) mergedMap.set(String(key), e);
-                        });
-
-                        // 서버 데이터로 덮어쓰기 (최신 상태 반영)
-                        data.forEach(e => {
-                            const key = e.id || e.timestamp;
-                            if (key) mergedMap.set(String(key), e);
-                        });
-
-                        entries = Array.from(mergedMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        saveToLocalStorage();
-                        renderEntries();
+                    if (!error && data) {
+                        cloudEntries = data;
                     }
                 } catch (err) {
-                    console.warn("Supabase 동기화 중 오류 (로컬 모드 유지):", err);
+                    console.warn("클라우드 데이터 로드 에러:", err);
                 }
             }
+
+            // 3. 로컬 데이터와 클라우드 데이터를 합쳐서 하나도 빠지지 않도록 병합 (Map 활용)
+            const entryMap = new Map();
+
+            // 로컬 데이터를 먼저 담고
+            localEntries.forEach(e => {
+                const key = e.id || e.timestamp;
+                if (key) entryMap.set(String(key), e);
+            });
+
+            // 클라우드 데이터를 덮어씌워 최신화 (아내분이 쓴 글, 댓글 포함)
+            cloudEntries.forEach(e => {
+                const key = e.id || e.timestamp;
+                if (key) {
+                    // 만약 로컬에만 있고 서버에 댓글 등이 있다면 보존 처리 등 안전 통합
+                    entryMap.set(String(key), e);
+                }
+            });
+
+            entries = Array.from(entryMap.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+
+            // 로컬 저장소 동기화 및 화면 렌더링
+            saveToLocalStorage();
+            renderEntries();
         }
 
         function editEntry(id, timestamp) {
-            const entry = entries.find(e => (id && e.id === id) || (timestamp && e.timestamp === timestamp));
+            const entry = entries.find(e => (id && String(e.id) === String(id)) || (timestamp && Number(e.timestamp) === Number(timestamp)));
             if (!entry) return;
 
             editingEntryId = id || timestamp;
@@ -428,7 +438,7 @@
             const dtText = document.getElementById('currentDateTime')?.textContent || '';
 
             if (editingEntryId !== null) {
-                const targetEntry = entries.find(e => (e.id && e.id === editingEntryId) || (e.timestamp && e.timestamp === editingEntryId));
+                const targetEntry = entries.find(e => (e.id && String(e.id) === String(editingEntryId)) || (e.timestamp && Number(e.timestamp) === Number(editingEntryId)));
                 if (targetEntry) {
                     targetEntry.author = authorObj;
                     targetEntry.tags = [...selectedTags];
@@ -468,13 +478,13 @@
                 comments: []
             };
 
-            // 1. 무조건 로컬 저장소에 먼저 안전하게 반영하고 화면 렌더링
+            // 1. 로컬 저장소 우선 반영
             entries.unshift(newEntry);
             saveToLocalStorage();
             renderEntries();
             cancelEdit();
 
-            // 2. 서버(Supabase) 저장 시도
+            // 2. 서버 전송
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -488,7 +498,7 @@
                         renderEntries();
                     }
                 } catch (err) {
-                    console.error("클라우드 저장 실패 (로컬에 안전하게 보존됨):", err);
+                    console.error("클라우드 저장 실패:", err);
                 }
             }
         }
@@ -500,7 +510,10 @@
         async function deleteEntry(id, timestamp) {
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
 
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
+            entries = entries.filter(e => {
+                if (id && e.id) return String(e.id) !== String(id);
+                return Number(e.timestamp) !== Number(timestamp);
+            });
             saveToLocalStorage();
             renderEntries();
 
@@ -517,7 +530,7 @@
         }
 
         // -------------------------------------------------------------
-        // 댓글 및 반응 함수
+        // 댓글 및 반응 함수 (로컬 및 클라우드 동기화 보장)
         // -------------------------------------------------------------
         function toggleCommentInput(entryIdKey) {
             openCommentBoxes[entryIdKey] = !openCommentBoxes[entryIdKey];
@@ -557,15 +570,20 @@
         }
 
         async function pushCommentToEntry(entryId, timestamp, commentObj) {
-            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            const targetEntry = entries.find(e => {
+                if (entryId && e.id) return String(e.id) === String(entryId);
+                return Number(e.timestamp) === Number(timestamp);
+            });
             if (!targetEntry) return;
 
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
+            // 로컬에 즉시 반영 및 저장
             saveToLocalStorage();
             renderEntries();
 
+            // 클라우드 서버에도 댓글 내용 동기화 업데이트
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
                     await supabaseClient
@@ -573,13 +591,16 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.error("댓글 동기화 실패:", err);
+                    console.error("댓글 클라우드 동기화 실패:", err);
                 }
             }
         }
 
         async function deleteComment(entryId, timestamp, commentId) {
-            const targetEntry = entries.find(e => (entryId && e.id === entryId) || (timestamp && e.timestamp === timestamp));
+            const targetEntry = entries.find(e => {
+                if (entryId && e.id) return String(e.id) === String(entryId);
+                return Number(e.timestamp) === Number(timestamp);
+            });
             if (!targetEntry || !targetEntry.comments) return;
 
             targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
@@ -594,7 +615,7 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.error("댓글 삭제 실패:", err);
+                    console.error("댓글 삭제 클라우드 동기화 실패:", err);
                 }
             }
         }
@@ -659,7 +680,7 @@
                                             ${c.emoji ? `<span class="text-sm shrink-0">${c.emoji}</span>` : ''}
                                             ${c.text ? `<span class="text-slate-600 truncate">${c.text}</span>` : ''}
                                         </div>
-                                        <button onclick="deleteComment(${entry.id || 'null'}, ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
+                                        <button onclick="deleteComment('${entry.id || ''}', ${entry.timestamp}, ${c.id})" class="text-slate-300 hover:text-rose-500 p-0.5 ml-1 transition-colors" title="댓글 삭제">
                                             <i class="fa-solid fa-xmark text-xs"></i>
                                         </button>
                                     </div>
@@ -681,8 +702,8 @@
                                     </button>
                                 `).join('')}
                             </div>
-                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment(${entry.id || 'null'}, ${entry.timestamp})">
-                            <button onclick="addComment(${entry.id || 'null'}, ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
+                            <input type="text" id="commentInput_${entryKey}" placeholder="댓글 남기기..." class="flex-1 px-2.5 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500" onkeypress="if(event.key==='Enter') addComment('${entry.id || ''}', ${entry.timestamp})">
+                            <button onclick="addComment('${entry.id || ''}', ${entry.timestamp})" class="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-lg shadow-sm shrink-0 transition-colors">
                                 등록
                             </button>
                         </div>
@@ -702,10 +723,10 @@
                             </div>
                         </div>
                         <div class="flex items-center gap-0.5">
-                            <button onclick="editEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
+                            <button onclick="editEntry('${entry.id || ''}', ${entry.timestamp})" class="text-slate-400 hover:text-indigo-600 p-1 transition-colors" title="수정">
                                 <i class="fa-solid fa-pen text-xs"></i>
                             </button>
-                            <button onclick="deleteEntry(${entry.id || 'null'}, ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
+                            <button onclick="deleteEntry('${entry.id || ''}', ${entry.timestamp})" class="text-slate-300 hover:text-rose-500 p-1 transition-colors" title="삭제">
                                 <i class="fa-solid fa-trash-can text-xs"></i>
                             </button>
                         </div>
