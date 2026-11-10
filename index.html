@@ -329,7 +329,7 @@
         }
 
         // -------------------------------------------------------------
-        // 데이터 CRUD (불러오기, 저장, 수정, 삭제)
+        // 데이터 CRUD (안정성 강화)
         // -------------------------------------------------------------
         async function loadEntries() {
             if (window.isCloudMode && supabaseClient) {
@@ -339,13 +339,14 @@
                         .select('*')
                         .order('timestamp', { ascending: false });
 
-                    if (!error && data) {
+                    if (!error && data && data.length > 0) {
                         entries = data;
+                        saveToLocalStorage();
                         renderEntries();
                         return;
                     }
                 } catch (err) {
-                    console.warn("Supabase 데이터 로드 에러:", err);
+                    console.warn("Supabase 데이터 로드 에러 (로컬 저장소 불러오기):", err);
                 }
             }
 
@@ -422,6 +423,8 @@
                     targetEntry.content = content;
                     targetEntry.imageUrl = currentPhotoBase64;
 
+                    saveToLocalStorage();
+
                     if (window.isCloudMode && supabaseClient && targetEntry.id) {
                         try {
                             await supabaseClient
@@ -437,7 +440,6 @@
                             console.error("클라우드 수정 실패:", err);
                         }
                     }
-                    saveToLocalStorage();
                 }
                 cancelEdit();
                 renderEntries();
@@ -454,6 +456,9 @@
                 comments: []
             };
 
+            entries.unshift(newEntry);
+            saveToLocalStorage();
+
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -461,20 +466,13 @@
                         .insert([newEntry])
                         .select();
 
-                    if (error) throw error;
-                    if (data && data[0]) {
-                        entries.unshift(data[0]);
-                    } else {
-                        entries.unshift(newEntry);
+                    if (!error && data && data[0]) {
+                        entries[0] = data[0];
+                        saveToLocalStorage();
                     }
                 } catch (err) {
-                    console.error("클라우드 저장 실패:", err);
-                    entries.unshift(newEntry);
-                    saveToLocalStorage();
+                    console.error("클라우드 저장 실패 (로컬 저장은 완료됨):", err);
                 }
-            } else {
-                entries.unshift(newEntry);
-                saveToLocalStorage();
             }
 
             cancelEdit();
@@ -488,6 +486,10 @@
         async function deleteEntry(id, timestamp) {
             if (!confirm("이 일기를 삭제하시겠습니까?")) return;
 
+            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
+            saveToLocalStorage();
+            renderEntries();
+
             if (window.isCloudMode && supabaseClient && id) {
                 try {
                     await supabaseClient
@@ -498,10 +500,6 @@
                     console.error("클라우드 삭제 실패:", err);
                 }
             }
-
-            entries = entries.filter(e => e.id ? e.id !== id : e.timestamp !== timestamp);
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
@@ -551,6 +549,9 @@
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
+            saveToLocalStorage();
+            renderEntries();
+
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
                     await supabaseClient
@@ -561,8 +562,6 @@
                     console.error("댓글 동기화 실패:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         async function deleteComment(entryId, timestamp, commentId) {
@@ -570,6 +569,9 @@
             if (!targetEntry || !targetEntry.comments) return;
 
             targetEntry.comments = targetEntry.comments.filter(c => c.id !== commentId);
+
+            saveToLocalStorage();
+            renderEntries();
 
             if (window.isCloudMode && supabaseClient && targetEntry.id) {
                 try {
@@ -581,12 +583,10 @@
                     console.error("댓글 삭제 실패:", err);
                 }
             }
-            saveToLocalStorage();
-            renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 일기 리스트 화면 출력 (글쓴이 옆 태그 출력 적용)
+        // 일기 리스트 화면 출력
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -612,13 +612,11 @@
                 const entryKey = entry.id || entry.timestamp;
                 const isInputOpen = openCommentBoxes[entryKey] || false;
 
-                // 글쓴이 옆에 함께 붙일 태그 HTML
                 let tagsInlineHTML = '';
                 if (entry.tags && entry.tags.length > 0) {
                     tagsInlineHTML = entry.tags.map(t => `<span class="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[10px] font-semibold">${t}</span>`).join(' ');
                 }
 
-                // 일기 본문 영역 (클릭 시 댓글 작성창 토글)
                 let contentBodyHTML = `
                     <div class="flex gap-3 items-start cursor-pointer group" onclick="toggleCommentInput('${entryKey}')" title="클릭하여 댓글 작성 창 열기/닫기">
                         <div class="flex-1">
@@ -632,7 +630,6 @@
                     </div>
                 `;
 
-                // 등록된 댓글 목록 HTML 생성 (항상 표시됨)
                 let commentsHTML = '';
                 if (entry.comments && entry.comments.length > 0) {
                     commentsHTML = `
@@ -656,14 +653,11 @@
                     `;
                 }
 
-                // 댓글 이모지 선택 상태
                 const currentSelectedEmoji = selectedCommentEmojis[entryKey] || '';
 
-                // 일기 내용을 클릭했을 때만 나타나는 댓글 입력 영역
                 let commentInputSectionHTML = `
                     <div class="${isInputOpen ? 'flex flex-col gap-2 pt-2 border-t border-slate-100' : 'hidden'}">
                         <div class="flex items-center gap-1.5">
-                            <!-- 이모지 반응 선택 버튼들 -->
                             <div class="flex items-center gap-0.5 bg-slate-50 p-1 rounded-lg border border-slate-200">
                                 ${REACTION_ICONS.map(emoji => `
                                     <button onclick="selectCommentEmoji('${entryKey}', '${emoji}')" class="w-6 h-6 flex items-center justify-center rounded text-xs transition-transform ${currentSelectedEmoji === emoji ? 'bg-indigo-100 border border-indigo-300 scale-110 shadow-sm' : 'hover:bg-slate-200/60'}">
