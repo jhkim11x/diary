@@ -54,7 +54,7 @@
         let openCommentBoxes = {};
 
         // -------------------------------------------------------------
-        // 안전 초기화
+        // Supabase 안전 연결 초기화
         // -------------------------------------------------------------
         function initSupabaseSafe() {
             try {
@@ -84,7 +84,7 @@
             }, 100);
         }
 
-        function initializeApp() {
+        async function initializeApp() {
             if (window.appInitialized) return;
             window.appInitialized = true;
 
@@ -93,11 +93,11 @@
                 if (window.isCloudMode) {
                     statusBadge.className = "w-7 h-7 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center text-xs font-bold border border-emerald-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>`;
-                    statusBadge.title = "실시간 연동 중";
+                    statusBadge.title = "실시간 공유 중";
                 } else {
                     statusBadge.className = "w-7 h-7 rounded-full bg-slate-100 text-slate-500 flex items-center justify-center text-xs font-bold border border-slate-200 shadow-sm";
                     statusBadge.innerHTML = `<span class="w-2.5 h-2.5 rounded-full bg-slate-400"></span>`;
-                    statusBadge.title = "로컬 저장 모드";
+                    statusBadge.title = "로컬 모드";
                 }
             }
 
@@ -107,7 +107,11 @@
 
             initAuthorSelector();
             initTagComboSelect();
-            loadEntries();
+            
+            // 앱 켤 때 서버 데이터를 최우선으로 가져오고 로컬과 병합
+            await loadEntries();
+            
+            // 실시간 변경 구독 (다른 폰에서 등록/수정/삭제 시 즉시 반영)
             subscribeRealtimeChanges();
         }
 
@@ -115,7 +119,7 @@
             if (window.isCloudMode && supabaseClient) {
                 supabaseClient
                     .channel('public:journal_entries')
-                    .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, () => {
+                    .on('postgres_changes', { event: '*', schema: 'public', table: 'journal_entries' }, payload => {
                         loadEntries();
                     })
                     .subscribe();
@@ -123,9 +127,28 @@
         }
 
         // -------------------------------------------------------------
-        // 완벽한 데이터 로드 및 융합 (로컬 데이터 절대 보존)
+        // 클라우드 & 로컬 통합 데이터 로드 함수
         // -------------------------------------------------------------
         async function loadEntries() {
+            let cloudEntries = [];
+            
+            // 1. 클라우드 서버에서 데이터 가져오기 시도
+            if (window.isCloudMode && supabaseClient) {
+                try {
+                    const { data, error } = await supabaseClient
+                        .from('journal_entries')
+                        .select('*')
+                        .order('timestamp', { ascending: false });
+
+                    if (!error && data) {
+                        cloudEntries = data;
+                    }
+                } catch (err) {
+                    console.warn("서버 데이터 로드 중 오류:", err);
+                }
+            }
+
+            // 2. 로컬 저장소 데이터 가져오기
             let localEntries = [];
             const local = localStorage.getItem('seodung_journal_entries');
             if (local) {
@@ -136,44 +159,29 @@
                 }
             }
 
-            if (window.isCloudMode && supabaseClient) {
-                try {
-                    const { data, error } = await supabaseClient
-                        .from('journal_entries')
-                        .select('*')
-                        .order('timestamp', { ascending: false });
+            // 3. 서버 데이터와 로컬 데이터를 하나로 병합 (중복 제거 및 최신 정렬)
+            const map = new Map();
+            
+            // 로컬 데이터 먼저 세팅
+            localEntries.forEach(item => {
+                const key = item.id || item.timestamp;
+                if (key) map.set(String(key), item);
+            });
 
-                    if (!error && data) {
-                        const map = new Map();
-                        
-                        // 로컬 데이터 먼저 유지
-                        localEntries.forEach(item => {
-                            const key = item.id || item.timestamp;
-                            if (key) map.set(String(key), item);
-                        });
+            // 서버 데이터로 덮어씌워 최신화 (아내분 폰에서 쓴 글도 여기서 들어옴)
+            cloudEntries.forEach(item => {
+                const key = item.id || item.timestamp;
+                if (key) map.set(String(key), item);
+            });
 
-                        // 서버 데이터로 최신화 병합
-                        data.forEach(item => {
-                            const key = item.id || item.timestamp;
-                            if (key) map.set(String(key), item);
-                        });
+            entries = Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
 
-                        entries = Array.from(map.values()).sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
-                        saveToLocalStorage();
-                        renderEntries();
-                        return;
-                    }
-                } catch (err) {
-                    console.warn("클라우드 읽기 실패, 로컬 유지:", err);
-                }
-            }
-
-            entries = localEntries;
+            saveToLocalStorage();
             renderEntries();
         }
 
         // -------------------------------------------------------------
-        // 일시 & 날씨
+        // 날짜 & 시계 & 날씨
         // -------------------------------------------------------------
         function updateDateTime() {
             const now = new Date();
@@ -214,7 +222,7 @@
         }
 
         // -------------------------------------------------------------
-        // 작성자 및 태그 선택
+        // 작성자 및 태그 선택기
         // -------------------------------------------------------------
         function initAuthorSelector() {
             const container = document.getElementById('authorSelector');
@@ -364,7 +372,7 @@
         }
 
         // -------------------------------------------------------------
-        // 일기 저장/수정/삭제 (로컬 우선 저장 보장)
+        // 데이터 CRUD (서버 동기화 우선 처리)
         // -------------------------------------------------------------
         function saveToLocalStorage() {
             localStorage.setItem('seodung_journal_entries', JSON.stringify(entries));
@@ -453,7 +461,7 @@
                                 })
                                 .eq('id', targetEntry.id);
                         } catch (err) {
-                            console.warn("클라우드 수정 오류:", err);
+                            console.warn("클라우드 수정 실패:", err);
                         }
                     }
                 }
@@ -471,13 +479,13 @@
                 comments: []
             };
 
-            // 1. 로컬에 즉시 저장 (사라짐 100% 방지)
+            // 1. 로컬에 우선 반영
             entries.unshift(newEntry);
             saveToLocalStorage();
             renderEntries();
             cancelEdit();
 
-            // 2. 서버 전송
+            // 2. 서버에 전송하여 아내분 폰과 실시간 공유
             if (window.isCloudMode && supabaseClient) {
                 try {
                     const { data, error } = await supabaseClient
@@ -491,7 +499,7 @@
                         renderEntries();
                     }
                 } catch (err) {
-                    console.warn("클라우드 전송 실패 (로컬 저장은 완료됨):", err);
+                    console.warn("클라우드 저장 실패:", err);
                 }
             }
         }
@@ -513,13 +521,13 @@
                         .delete()
                         .eq('id', id);
                 } catch (err) {
-                    console.warn("클라우드 삭제 오류:", err);
+                    console.warn("클라우드 삭제 실패:", err);
                 }
             }
         }
 
         // -------------------------------------------------------------
-        // 댓글 및 이모지 반응 (로컬 즉시 저장 보장)
+        // 댓글 및 이모지 반응 (서버 동기화 포함)
         // -------------------------------------------------------------
         function toggleCommentInput(entryIdKey) {
             openCommentBoxes[entryIdKey] = !openCommentBoxes[entryIdKey];
@@ -568,7 +576,6 @@
             if (!targetEntry.comments) targetEntry.comments = [];
             targetEntry.comments.push(commentObj);
 
-            // 로컬에 먼저 댓글 완전 동기화 저장
             saveToLocalStorage();
             renderEntries();
 
@@ -579,7 +586,7 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.warn("댓글 클라우드 저장 실패:", err);
+                    console.warn("댓글 클라우드 동기화 실패:", err);
                 }
             }
         }
@@ -603,13 +610,13 @@
                         .update({ comments: targetEntry.comments })
                         .eq('id', targetEntry.id);
                 } catch (err) {
-                    console.warn("댓글 삭제 동기화 오류:", err);
+                    console.warn("댓글 삭제 클라우드 동기화 실패:", err);
                 }
             }
         }
 
         // -------------------------------------------------------------
-        // 일기 목록 렌더링 (요청 디자인 세 가지 모두 적용)
+        // 화면 렌더링
         // -------------------------------------------------------------
         function renderEntries() {
             const container = document.getElementById('entriesContainer');
@@ -681,7 +688,7 @@
 
                 const currentSelectedEmoji = selectedCommentEmojis[entryKey] || '';
 
-                // 반응 선택 버튼 (알통 제거, 엄지 아래 👎 포함)
+                // 반응 버튼 (알통 제거, 엄지 아래 👎 포함)
                 let commentInputSectionHTML = `
                     <div class="${isInputOpen ? 'flex flex-col gap-2 pt-2 border-t border-slate-100' : 'hidden'}">
                         <div class="flex items-center gap-1.5">
@@ -768,7 +775,7 @@
                 </div>
             </div>
 
-            <!-- 상단 슬림 상태 아이콘 -->
+            <!-- 실시간 상태 표시 뱃지 -->
             <div class="flex items-center gap-1.5">
                 <button id="notifToggleBtn" class="w-7 h-7 rounded-full text-slate-400 bg-slate-50 border border-slate-200 flex items-center justify-center hover:bg-slate-100 transition-colors" title="알림">
                     <i class="fa-solid fa-bell-slash text-xs"></i>
